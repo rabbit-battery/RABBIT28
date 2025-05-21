@@ -1,0 +1,10 @@
+
+{
+  "name": "rabbit-battery-demo",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo Building project... && mkdir -p dist && cp index.html dist/index.html"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
