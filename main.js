@@ -701,7 +701,10 @@ async function handleImportMatrix(matrix){
   setImportProgress(2, `جاري تحليل ${totalRows.toLocaleString('ar-SA')} صف...`, 'قد تستغرق العملية ثوانٍ للملفات الكبيرة - لا تغلق الصفحة');
   let added=0, updated=0, skipped=0; let logLines=[]; let newItems=[];
   let processed=0;
-  const BATCH=400; // دفعات لتجنب تجميد المتصفح
+  // خريطة سريعة للموجود - O(1)
+  const existingMap = new Map(DATA.map(x=>[String(x.sub), x]));
+  const fileSeen = new Map();
+  const BATCH=800; // أكبر قليلا مع yield يمنع التهنيج
   for(let batchStart=startIdx; batchStart<matrix.length; batchStart+=BATCH){
     const batchEnd=Math.min(batchStart+BATCH, matrix.length);
     for(let i=batchStart;i<batchEnd;i++){
@@ -769,24 +772,48 @@ async function handleImportMatrix(matrix){
     let missingCoords=false;
     if(isNaN(lat)||isNaN(lng)){ lat=0; lng=0; missingCoords=true; notes=(notes? notes+' | ':'')+'⚠️ يحتاج تحديث إحداثيات'; }
 
-    const existingIdx=DATA.findIndex(x=> String(x.sub)===String(sub));
-    if(existingIdx>-1){
-      const prev=DATA[existingIdx];
-      // لو الإحداثيات مفقودة احتفظ بالقديمة إن وجدت
+    // ديدوب سريع O(1) بدل O(n²) - يمنع التهنيج مع 500 ألف
+    const subKey = String(sub);
+    // داخل الملف نفسه لو تكرر نفس الحساب نحدثه لا نكرره
+    if(fileSeen.has(subKey)){
+      const prevInFile=fileSeen.get(subKey);
+      // حدث الموجود في نفس الملف (آخر قيمة تفوز)
+      if(!missingCoords || (!prevInFile.lat && !prevInFile.lng)) { prevInFile.lat=lat; prevInFile.lng=lng; }
+      prevInFile.equip=equip; prevInFile.name=name||prevInFile.name; prevInFile.address=address||prevInFile.address; prevInFile.notes=notes||prevInFile.notes; prevInFile.updatedAt=Date.now();
+      updated++; if(logLines.length<120) logLines.push(`سطر ${i+1}: تحديث مكرر داخل الملف ${sub} / ${equip}`);
+      continue;
+    }
+    if(existingMap.has(subKey)){
+      const prev=existingMap.get(subKey);
       if(missingCoords && prev.lat && prev.lng){ lat=prev.lat; lng=prev.lng; }
-      DATA[existingIdx]={...prev, sub, equip, name: name||prev.name, address: address||prev.address, lat, lng, notes: notes||prev.notes, updatedAt: Date.now()};
-      newItems.push(DATA[existingIdx]);
-      updated++; logLines.push(`سطر ${i+1}: تحديث ${sub} / ${equip}${missingCoords?' (بدون إحداثيات)':''}`);
+      const updatedObj={...prev, sub, equip, name: name||prev.name, address: address||prev.address, lat, lng, notes: notes||prev.notes, updatedAt: Date.now()};
+      // حدث DATA أيضاً لو موجود
+      const idx=DATA.findIndex(x=>String(x.sub)===subKey);
+      if(idx>-1) DATA[idx]=updatedObj; else DATA.push(updatedObj);
+      existingMap.set(subKey, updatedObj);
+      fileSeen.set(subKey, updatedObj);
+      newItems.push(updatedObj);
+      updated++; if(logLines.length<120) logLines.push(`سطر ${i+1}: تحديث موجود ${sub} / ${equip}${missingCoords?' (بدون إحداثيات)':''}`);
     } else {
-      const nid=Date.now().toString()+Math.random().toString(16).slice(2);
+      // id ثابت من sub لمنع التكرار حتى بعد إعادة التشغيل - upsert على id سيحدث نفس الصف
+      const nid='loc_'+subKey;
       const obj={ id: nid, sub, equip, name: name||'مشترك', address: address||'', lat, lng, notes, updatedAt: Date.now()};
-      DATA.push(obj); newItems.push(obj); added++; if(logLines.length<200) logLines.push(`سطر ${i+1}: إضافة ${sub} / ${equip}${missingCoords?' (بدون إحداثيات - عدّل لاحقاً)':''}`);
+      DATA.push(obj);
+      existingMap.set(subKey, obj);
+      fileSeen.set(subKey, obj);
+      newItems.push(obj); added++; if(logLines.length<120) logLines.push(`سطر ${i+1}: إضافة ${sub} / ${equip}${missingCoords?' (بدون إحداثيات - عدّل لاحقاً)':''}`);
     }
     }
     processed+= (batchEnd-batchStart);
     const pct= 10 + (processed/totalRows)*40;
     setImportProgress(pct, `تحليل ${processed.toLocaleString('ar-SA')}/${totalRows.toLocaleString('ar-SA')} صف...`, `تم تجهيز ${(added+updated).toLocaleString('ar-SA')} موقع حتى الآن`);
     await new Promise(r=> setTimeout(r, 0));
+  }
+  // في الوضع السحابي لا نحتفظ بكل الـ 500 ألف في الذاكرة - نحتفظ بآخر 2000 فقط للعرض
+  if(CLOUD_MODE && DATA.length>5000){
+    // احتفظ بآخر المحدثة فقط للعرض
+    const keep = new Set(newItems.slice(-2000).map(x=>String(x.sub)));
+    DATA = DATA.filter(x=> keep.has(String(x.sub))).slice(0,2000);
   }
   const savedOk=saveLocal();
   updateStats(); renderAdminTable();
@@ -831,7 +858,9 @@ if(csvInput) csvInput.addEventListener('change', async (e)=>{
     } else {
       const text=await file.text();
       const clean=text.replace(/^\ufeff/,'');
-      matrix=parseCSVLinesSmart(clean);
+      // للملفات الضخمة نقرأ بذكاء بدون تجميد
+    matrix=parseCSVLinesSmart(clean);
+    if(matrix.length>500000){ showToast('الملف ضخم جداً - سيتم معالجة 500 ألف كحد أقصى','error'); matrix=matrix.slice(0,500000); }
     }
     await handleImportMatrix(matrix);
   }catch(err){
