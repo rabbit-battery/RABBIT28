@@ -8,10 +8,13 @@ function getCreds(){
   return DEFAULT_CREDS;
 }
 
-// --- Supabase Integration ---
+// --- Supabase Integration - مُحسّن لـ 500 ألف موقع ---
 let supabaseClient = null;
 let useSupabase = false;
 let realtimeChannel = null;
+let CLOUD_MODE = false; // عند > 20 ألف يتحول لبحث سحابي مباشر بدون تحميل الكل
+let CLOUD_COUNT = 0;
+const CLOUD_THRESHOLD = 20000; // عتبة التحول للسحابة
 
 function toDb(item){
   return {
@@ -95,9 +98,30 @@ function setupRealtime(){
     .subscribe();
 }
 
-async function fetchFromSupabase(){
+async function getSupabaseCount(){
+  if(!useSupabase) return 0;
+  const { count, error } = await supabaseClient.from('locations').select('id', {count:'exact', head:true});
+  if(error){ console.warn('count error', error); return DATA.length; }
+  return count||0;
+}
+async function fetchFromSupabase(limit=null){
   if(!useSupabase) return null;
-  // صفحات لأن Supabase يرجع 1000 كحد أقصى
+  if(limit){
+    const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).limit(limit);
+    if(error) throw error;
+    return (data||[]).map(fromDb);
+  }
+  // لو العدد ضخم لا نحمل الكل - نكتفي بآخر 5000 فقط للعرض السريع
+  const cnt = await getSupabaseCount();
+  CLOUD_COUNT = cnt;
+  if(cnt > CLOUD_THRESHOLD){
+    CLOUD_MODE = true;
+    console.log(`☁️ وضع سحابي: ${cnt.toLocaleString('ar-SA')} موقع - البحث مباشر من السيرفر`);
+    const badge=document.getElementById('supabaseBadge');
+    if(badge) badge.textContent=`سحابي ☁️ ${cnt.toLocaleString('ar-SA')} موقع`;
+    const { data } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).limit(200);
+    return (data||[]).map(fromDb);
+  }
   let all=[], from=0, step=1000;
   while(true){
     const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).range(from, from+step-1);
@@ -106,8 +130,23 @@ async function fetchFromSupabase(){
     all.push(...data);
     if(data.length<step) break;
     from+=step;
+    if(all.length> CLOUD_THRESHOLD) { // حماية
+      CLOUD_MODE=true; break;
+    }
   }
   return all.map(fromDb);
+}
+async function searchSupabase(q){
+  if(!useSupabase) return null;
+  const nq = q.trim();
+  if(!nq) return [];
+  // بحث ذكي: يبحث في sub و equip بنفس الوقت - يدعم 30/500
+  const { data, error } = await supabaseClient.from('locations')
+    .select('*')
+    .or(`sub.ilike.%${nq}%,equip.ilike.%${nq}%`)
+    .limit(50);
+  if(error){ console.error('searchSupabase', error); return []; }
+  return (data||[]).map(fromDb);
 }
 async function upsertToSupabase(item){
   if(!useSupabase) return;
@@ -121,26 +160,30 @@ async function deleteFromSupabase(id){
 }
 async function bulkUpsertToSupabase(items, onProgress){
   if(!useSupabase || items.length===0) return {ok:0, fail:0};
-  const CHUNK=150; // صغير لضمان عدم تجاوز حد السيرفر
+  // دفعات أكبر للملفات الضخمة لتسريع 500 ألف
+  const CHUNK = items.length>50000 ? 1000 : items.length>10000 ? 500 : 300;
   let ok=0, fail=0;
   const rows = items.map(toDb);
   const chunks=chunkArray(rows, CHUNK);
   for(let i=0;i<chunks.length;i++){
     const c=chunks[i];
-    try{
+    let tries=0, done=false;
+    while(tries<3 && !done){
       const { error } = await supabaseClient.from('locations').upsert(c, {onConflict:'id'});
-      if(error) throw error;
-      ok+=c.length;
-    }catch(e){
-      console.error('bulk upsert chunk failed', i, e);
-      fail+=c.length;
-      showToast(`خطأ في حفظ جزء ${i+1}/${chunks.length} - سيعاد المحاولة`,'error');
+      if(!error){ ok+=c.length; done=true; break; }
+      tries++;
+      console.warn(`chunk ${i+1} try ${tries} fail`, error);
+      await new Promise(r=> setTimeout(r, 400*tries));
+      if(tries===3){ fail+=c.length; showToast(`فشل جزء ${i+1}/${chunks.length} بعد 3 محاولات`,'error'); }
     }
     if(onProgress) onProgress(i+1, chunks.length, ok);
-    // تنفس للواجهة حتى لا تتجمد
-    await new Promise(r=> setTimeout(r, 60));
+    // تنفس قصير جداً للملفات الضخمة
+    if(i%10===0) await new Promise(r=> setTimeout(r, 20));
+    else await new Promise(r=> setTimeout(r, 5));
   }
   if(fail) console.warn(`bulk done: ok=${ok} fail=${fail}`);
+  // تحديث العداد السحابي
+  if(ok) { CLOUD_COUNT+=ok; if(CLOUD_COUNT> CLOUD_THRESHOLD) CLOUD_MODE=true; }
   return {ok, fail};
 }
 async function clearSupabase(){
@@ -205,23 +248,26 @@ function saveData(){
 }
 
 function updateStats(){
-  const total = DATA.length;
+  // في الوضع السحابي نعرض العدد الحقيقي من السيرفر
+  const total = CLOUD_MODE ? CLOUD_COUNT : DATA.length;
   const el = document.getElementById('statTotal');
   if(el) el.textContent = total.toLocaleString('ar-SA');
   const adminTotal = document.getElementById('adminTotal');
-  if(adminTotal) adminTotal.textContent = total;
+  if(adminTotal) adminTotal.textContent = total.toLocaleString('ar-SA');
+  if(CLOUD_MODE){
+    const upd=document.getElementById('statUpdate');
+    if(upd) upd.textContent=`وضع سحابي ☁️ ${total.toLocaleString('ar-SA')} موقع`;
+    const adminLast=document.getElementById('adminLastAdd');
+    if(adminLast && CLOUD_COUNT) adminLast.textContent=`سحابي - ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع إجمالي`;
+    return;
+  }
   const last = DATA.slice().sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0))[0];
   const upd = document.getElementById('statUpdate');
   if(upd && last){
     const d = new Date(last.updatedAt);
-    // if supabase mode keep sync text, else show date
     if(!useSupabase) upd.textContent = d.toLocaleDateString('ar-SA', { day:'numeric', month:'short', year:'numeric'});
     const adminLast = document.getElementById('adminLastAdd');
     if(adminLast) adminLast.textContent = d.toLocaleDateString('ar-SA') + ' • ' + (last.sub||'');
-  }
-  if(useSupabase){
-    const filteredEl = document.getElementById('adminFilteredCount');
-    // updated in renderAdminTable
   }
 }
 
@@ -240,10 +286,25 @@ function googleMapsLink(lat,lng){ return `https://www.google.com/maps/search/?ap
 function googleMapsDirections(lat,lng){ return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`; }
 function wazeLink(lat,lng){ return `https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes`; }
 function appleMapsLink(lat,lng){ return `https://maps.apple.com/?q=${lat},${lng}&ll=${lat},${lng}`; }
-function doSearch(q, scroll=true){
+async function doSearch(q, scroll=true){
   lastQuery = q;
   const query = (q||'').trim();
   if(!query){ emptyState.classList.remove('hidden'); resultsContainer.classList.add('hidden'); noResults.classList.add('hidden'); resultsContainer.innerHTML=''; return; }
+  if(CLOUD_MODE && useSupabase){
+    emptyState.classList.add('hidden'); noResults.classList.add('hidden'); resultsContainer.classList.remove('hidden');
+    resultsContainer.innerHTML=`<div class="bg-white rounded-2xl border border-blue-200 px-4 py-6 text-center"><i class="fa-solid fa-spinner fa-spin text-blue-600 ml-2"></i> جاري البحث في ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع...</div>`;
+    const results = await searchSupabase(query);
+    if(results.length===0){ resultsContainer.classList.add('hidden'); noResults.classList.remove('hidden'); noResultsQuery.textContent=`البحث: "${query}" - ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع بالسحابة`; return; }
+    resultsContainer.innerHTML = `
+    <div class="bg-white rounded-2xl border border-blue-200 px-4 py-3 flex items-center justify-between shadow-sm">
+      <p class="text-sm font-black text-zinc-800"><i class="fa-solid fa-check-circle text-blue-600 ml-2"></i> تم العثور على <span class="bg-primary text-white px-2 py-0.5 rounded-full text-xs mx-1">${results.length}</span> من ${CLOUD_COUNT.toLocaleString('ar-SA')} \u2022 البحث: <span class="font-mono bg-zinc-900 text-white px-2 py-1 rounded-lg text-xs">${escapeHtml(query)}</span> <span class="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 mr-1">\u2601\uFE0F سحابي</span></p>
+      <button id="shareResults" class="hidden sm:flex items-center gap-2 bg-zinc-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black"><i class="fa-solid fa-share-nodes"></i> مشاركة</button>
+    </div>
+    ${results.map(item=> cardHtml(item)).join('')}
+  `;
+    if(scroll) resultsContainer.scrollIntoView({behavior:'smooth', block:'start'});
+    attachCardEvents(); return;
+  }
   const results = DATA.filter(it=> matches(it, query));
   if(results.length===0){ emptyState.classList.add('hidden'); resultsContainer.classList.add('hidden'); noResults.classList.remove('hidden'); noResultsQuery.textContent = `البحث: "${query}"`; return; }
   emptyState.classList.add('hidden'); noResults.classList.add('hidden'); resultsContainer.classList.remove('hidden');
@@ -464,11 +525,18 @@ async function duplicateItem(id){
 function renderAdminTable(){
   const q=(adminSearch.value||'').trim().toLowerCase();
   let filtered=DATA;
-  if(q){ filtered=DATA.filter(it=> it.sub.toLowerCase().includes(q) || it.equip.toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q) || (it.address||'').toLowerCase().includes(q)); }
-  const countEl=document.getElementById('adminFilteredCount'); if(countEl) countEl.textContent=filtered.length;
-  if(filtered.length===0){ adminTableBody.innerHTML=''; adminEmpty.classList.remove('hidden'); return; }
+  if(q){
+    // في الوضع السحابي لو البحث فارغ لا نبحث في الـ 200 فقط - يبحث سحابياً عبر doSearch
+    filtered=DATA.filter(it=> it.sub.toLowerCase().includes(q) || it.equip.toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q) || (it.address||'').toLowerCase().includes(q));
+  }
+  const countEl=document.getElementById('adminFilteredCount'); if(countEl) countEl.textContent= (CLOUD_MODE? CLOUD_COUNT : filtered.length).toLocaleString('ar-SA');
+  if(filtered.length===0){ adminTableBody.innerHTML=''; adminEmpty.classList.remove('hidden'); if(CLOUD_MODE) adminEmpty.innerHTML=`لا يوجد في الـ 200 المعروضة - استخدم البحث للبحث في ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع بالسحابة ☁️`; else adminEmpty.textContent='لا توجد بيانات مطابقة'; return; }
   adminEmpty.classList.add('hidden');
-  adminTableBody.innerHTML=filtered.map(it=>`
+  // للـ 500 ألف: لا نرسم أكثر من 250 صف لتجنب التهنيج
+  const LIMIT=250;
+  const toShow = filtered.slice(0, LIMIT);
+  const extra = filtered.length - toShow.length;
+  adminTableBody.innerHTML=toShow.map(it=>`
     <tr class="hover:bg-zinc-50 transition">
       <td class="px-4 py-3 font-mono font-bold text-xs">${escapeHtml(it.sub)}</td>
       <td class="px-4 py-3 font-mono font-bold text-xs">${escapeHtml(it.equip)}</td>
@@ -496,6 +564,11 @@ function renderAdminTable(){
       else if(act==='copy') duplicateItem(id);
     });
   });
+  if(extra>0){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td colspan="5" class="px-4 py-3 text-center bg-amber-50 text-amber-800 text-xs font-bold">عرض ${LIMIT.toLocaleString('ar-SA')} من ${filtered.length.toLocaleString('ar-SA')} - استخدم الفلتر لتضييق النتائج ${CLOUD_MODE?`(${CLOUD_COUNT.toLocaleString('ar-SA')} بالسحابة - البحث يعرض 50 نتيجة سحابية)` : ''}</td>`;
+    adminTableBody.appendChild(tr);
+  }
 }
 if(adminSearch) adminSearch.addEventListener('input', renderAdminTable);
 
@@ -783,29 +856,29 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ closeLogin(); closeAdmin(); }
 });
 
-// --- Init with Supabase ---
+// --- Init with Supabase - يدعم 500 ألف ---
 async function boot(){
   const local = loadLocal();
-  // show local first for fast paint
-  if(local){ DATA = local; updateStats(); renderAdminTable(); }
-  else { DATA = [...SEED]; saveLocal(); updateStats(); renderAdminTable(); }
-
-  // try supabase
+  if(local && !CLOUD_MODE){ DATA = local; updateStats(); renderAdminTable(); }
+  else if(!local){ DATA = [...SEED]; saveLocal(); updateStats(); renderAdminTable(); }
   const ok = await initSupabase();
   if(ok){
     try{
+      const cnt = await getSupabaseCount();
+      CLOUD_COUNT = cnt;
+      if(cnt > CLOUD_THRESHOLD) CLOUD_MODE=true;
+      updateStats();
       const remote = await fetchFromSupabase();
       if(remote && remote.length>0){
-        DATA = remote;
+        // في الوضع السحابي لا نحتاج كل البيانات محليا
+        if(!CLOUD_MODE) DATA = remote;
+        else DATA = remote; // 200 فقط للعرض
         saveLocal();
         updateStats();
         renderAdminTable();
-        showToast(`متصل بقاعدة البيانات - ${DATA.length} موقع متزامن ✓`);
-        // update supabaseBadge in stats?
-        const supBadge = document.createElement('span');
-        // optional: show in console
+        if(CLOUD_MODE) showToast(`☁️ وضع سحابي مفعّل - ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع - البحث مباشر من السيرفر ✓`);
+        else showToast(`متصل بقاعدة البيانات - ${DATA.length} موقع متزامن ✓`);
       } else if(remote && remote.length===0){
-        // first time? push local to remote if remote empty but local has seed
         if(local && local.length>0){
           await bulkUpsertToSupabase(local);
           showToast('تمت مزامنة البيانات المحلية إلى السحابة ✓');
