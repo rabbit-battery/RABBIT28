@@ -15,11 +15,11 @@
         extend: {
           fontFamily: { tajawal: ['Tajawal', 'sans-serif'] },
           colors: {
-            primary: '#0B6B3D',
-            primaryDark: '#094F2D',
-            primaryLight: '#E8F5E9',
-            accent: '#C9A227',
-            accentDark: '#9E8020',
+            primary: '#0D5BBA',
+            primaryDark: '#0A3E8A',
+            primaryLight: '#E9F0FF',
+            accent: '#2EA8FF',
+            accentDark: '#0B7BCE',
           }
         }
       }
@@ -28,14 +28,14 @@
   <style>
     *{font-family:'Tajawal',sans-serif}
     .glass{background:rgba(255,255,255,0.92);backdrop-filter:blur(12px)}
-    .pattern-bg{background-image: radial-gradient(circle at 1px 1px, rgba(11,107,61,0.06) 1px, transparent 0); background-size: 22px 22px;}
+    .pattern-bg{background-image: radial-gradient(circle at 1px 1px, rgba(13,91,186,0.06) 1px, transparent 0); background-size: 22px 22px;}
     .hide-scrollbar::-webkit-scrollbar{display:none}
     @keyframes slideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     .animate-in{animation:slideIn .4s ease}
     .map-iframe{border:0;width:100%;height:100%;border-radius:16px}
   </style>
 </head>
-<body class="bg-[#F8FAF8] text-zinc-800 pattern-bg min-h-screen">
+<body class="bg-[#F6F9FF] text-zinc-800 pattern-bg min-h-screen">
 
   <!-- Top Bar -->
   <div class="bg-primary text-white text-[12.5px] py-2 px-4">
@@ -84,8 +84,8 @@
         <div><p class="text-[11px] text-zinc-500 font-bold tracking-wider">إجمالي المواقع</p><p id="statTotal" class="text-xl font-black">0</p></div>
       </div>
       <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
-        <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600"><i class="fa-solid fa-signal"></i></div>
-        <div><p class="text-[11px] text-zinc-500 font-bold">حالة النظام</p><p class="text-sm font-black text-emerald-600 flex items-center gap-1.5"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> متصل - Online</p></div>
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><i class="fa-solid fa-signal"></i></div>
+        <div><p class="text-[11px] text-zinc-500 font-bold">حالة النظام</p><p class="text-sm font-black text-blue-600 flex items-center gap-1.5"><span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> متصل - Online</p></div>
       </div>
       <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
         <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600"><i class="fa-solid fa-clock"></i></div>
@@ -208,20 +208,24 @@
   </section>
 
   <!-- Footer -->
-  <footer class="bg-zinc-900 text-zinc-300 mt-6">
+  <footer class="bg-gradient-to-br from-[#0A3E8A] to-[#0D5BBA] text-white mt-6 border-t border-white/10">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white"><i class="fa-solid fa-bolt"></i></div>
+          <div class="w-10 h-10 rounded-xl bg-white text-primary flex items-center justify-center shadow-lg"><i class="fa-solid fa-bolt"></i></div>
           <div>
             <p class="text-white font-black text-sm">مكتب غرب القصيم للكهرباء</p>
-            <p class="text-xs text-zinc-400">© 2026 جميع الحقوق محفوظة - نظام إدارة المواقع الميدانية</p>
+            <p class="text-xs text-white/80 font-bold mt-0.5">© 2026 جميع الحقوق محفوظة للمهندس <span class="text-white bg-white/15 px-2 py-0.5 rounded-full border border-white/15">Mahmoud Elzagh</span></p>
           </div>
         </div>
         <div class="flex items-center gap-2 text-xs">
-          <span class="bg-white/10 px-3 py-1.5 rounded-full"><i class="fa-solid fa-envelope ml-1"></i> west-qassim@se.com.sa</span>
-          <span class="bg-primary px-3 py-1.5 rounded-full text-white font-bold">خدمة الفنيين 24/7</span>
+          <span class="bg-white text-primary px-3 py-1.5 rounded-full font-black"><i class="fa-solid fa-envelope ml-1"></i> west-qassim@se.com.sa</span>
+          <span class="bg-white/15 border border-white/15 px-3 py-1.5 rounded-full text-white font-bold">خدمة الفنيين 24/7</span>
         </div>
+      </div>
+      <div class="mt-6 pt-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/60">
+        <p class="font-bold">تصميم وتطوير: المهندس Mahmoud Elzagh — West Al-Qassim Electricity Office</p>
+        <p class="flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> نظام آمن ومعتمد - الإصدار 2.0</p>
       </div>
     </div>
   </footer>
@@ -274,10 +278,10 @@
               <h3 class="font-black text-[15px]">لوحة تحكم المالك</h3>
               <p class="text-[11px] text-zinc-500 font-bold">إدارة مواقع المشتركين - تحديث فوري للفنيين</p>
             </div>
-            <span class="hidden sm:inline-flex bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black"><span class="w-2 h-2 bg-emerald-500 rounded-full inline-block ml-1 animate-pulse"></span> Online</span>
+            <span class="hidden sm:inline-flex bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full text-xs font-black"><span class="w-2 h-2 bg-blue-500 rounded-full inline-block ml-1 animate-pulse"></span> Online</span>
           </div>
           <div class="flex items-center gap-2">
-            <button id="btnExport" class="hidden sm:flex items-center gap-2 bg-white border border-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-zinc-50"><i class="fa-solid fa-file-excel text-emerald-600"></i> تصدير Excel</button>
+            <button id="btnExport" class="hidden sm:flex items-center gap-2 bg-white border border-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-zinc-50"><i class="fa-solid fa-file-excel text-blue-600"></i> تصدير Excel</button>
             <button id="adminClose" class="w-10 h-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center hover:bg-black"><i class="fa-solid fa-xmark"></i></button>
           </div>
         </div>
@@ -323,7 +327,7 @@
 
           <!-- Bulk Upload -->
           <div class="bg-white rounded-[20px] border border-zinc-200 p-5">
-            <h4 class="font-black text-sm flex items-center gap-2"><i class="fa-solid fa-file-csv text-emerald-600"></i> رفع جماعي (Excel / CSV)</h4>
+            <h4 class="font-black text-sm flex items-center gap-2"><i class="fa-solid fa-file-csv text-blue-600"></i> رفع جماعي (Excel / CSV)</h4>
             <p class="text-xs text-zinc-500 mt-1">ارفع ملف CSV بترميز UTF-8 بالأعمدة: <b>رقم الاشتراك, رقم التجهيز, اسم المشترك, العنوان, lat, lng, ملاحظات</b></p>
             <div class="flex flex-col sm:flex-row gap-3 mt-4">
               <label class="flex-1 bg-zinc-900 hover:bg-black text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition">

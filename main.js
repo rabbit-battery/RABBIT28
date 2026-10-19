@@ -125,8 +125,8 @@ function doSearch(q, scroll=true){
   noResults.classList.add('hidden');
   resultsContainer.classList.remove('hidden');
   resultsContainer.innerHTML = `
-    <div class="bg-white rounded-2xl border border-emerald-200 px-4 py-3 flex items-center justify-between shadow-sm">
-      <p class="text-sm font-black text-zinc-800"><i class="fa-solid fa-check-circle text-emerald-600 ml-2"></i> تم العثور على <span class="bg-primary text-white px-2 py-0.5 rounded-full text-xs mx-1">${results.length}</span> نتيجة للبحث: <span class="font-mono bg-zinc-900 text-white px-2 py-1 rounded-lg text-xs">${escapeHtml(query)}</span></p>
+    <div class="bg-white rounded-2xl border border-blue-200 px-4 py-3 flex items-center justify-between shadow-sm">
+      <p class="text-sm font-black text-zinc-800"><i class="fa-solid fa-check-circle text-blue-600 ml-2"></i> تم العثور على <span class="bg-primary text-white px-2 py-0.5 rounded-full text-xs mx-1">${results.length}</span> نتيجة للبحث: <span class="font-mono bg-zinc-900 text-white px-2 py-1 rounded-lg text-xs">${escapeHtml(query)}</span></p>
       <button id="shareResults" class="hidden sm:flex items-center gap-2 bg-zinc-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black"><i class="fa-solid fa-share-nodes"></i> مشاركة</button>
     </div>
     ${results.map(item=> cardHtml(item)).join('')}
@@ -146,7 +146,7 @@ function cardHtml(item){
   const updated = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('ar-SA', {year:'numeric', month:'long', day:'numeric'}) : '-';
   return `
   <div class="bg-white rounded-[20px] border border-zinc-200 shadow-sm overflow-hidden animate-in">
-    <div class="h-1.5 bg-gradient-to-r from-primary to-emerald-400"></div>
+    <div class="h-1.5 bg-gradient-to-r from-primary to-accent"></div>
     <div class="p-5 md:p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex items-center gap-3">
@@ -156,7 +156,7 @@ function cardHtml(item){
             <p class="text-xs text-zinc-500 mt-1 flex items-center gap-2"><i class="fa-solid fa-map-pin text-zinc-400"></i> ${escapeHtml(item.address||'—')}</p>
           </div>
         </div>
-        <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full text-[11px] font-black flex items-center gap-1"><span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> متاح - جاهز للزيارة</span>
+        <span class="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-full text-[11px] font-black flex items-center gap-1"><span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> متاح - جاهز للزيارة</span>
       </div>
 
       <div class="grid md:grid-cols-3 gap-3 mt-5">
@@ -248,7 +248,7 @@ let toastTimer;
 function showToast(msg, type='default'){
   const toast = document.getElementById('toast');
   const inner = document.getElementById('toastInner');
-  inner.innerHTML = (type==='error' ? '<i class="fa-solid fa-circle-xmark text-red-400"></i>' : '<i class="fa-solid fa-circle-check text-emerald-400"></i>') + `<span>${msg}</span>`;
+  inner.innerHTML = (type==='error' ? '<i class="fa-solid fa-circle-xmark text-red-400"></i>' : '<i class="fa-solid fa-circle-check text-blue-400"></i>') + `<span>${msg}</span>`;
   inner.className = `px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 min-w-[280px] justify-center ${type==='error'?'bg-red-600 text-white':'bg-zinc-900 text-white'}`;
   toast.classList.remove('hidden');
   clearTimeout(toastTimer);
@@ -452,7 +452,7 @@ function renderAdminTable(){
       <td class="px-4 py-3 font-mono text-[11px]">${it.lat.toFixed(4)}, ${it.lng.toFixed(4)}<br><span class="text-[10px] text-zinc-500">${new Date(it.updatedAt).toLocaleDateString('ar-SA')}</span></td>
       <td class="px-4 py-3">
         <div class="flex items-center justify-center gap-1">
-          <button data-act="open" data-id="${it.id}" class="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center" title="فتح في الخرائط"><i class="fa-solid fa-location-dot text-xs"></i></button>
+          <button data-act="open" data-id="${it.id}" class="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center" title="فتح في الخرائط"><i class="fa-solid fa-location-dot text-xs"></i></button>
           <button data-act="edit" data-id="${it.id}" class="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 flex items-center justify-center" title="تعديل"><i class="fa-solid fa-pen text-xs"></i></button>
           <button data-act="copy" data-id="${it.id}" class="w-8 h-8 rounded-lg bg-zinc-50 hover:bg-zinc-100 text-zinc-700 border border-zinc-200 flex items-center justify-center" title="نسخ"><i class="fa-regular fa-copy text-xs"></i></button>
           <button data-act="del" data-id="${it.id}" class="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 flex items-center justify-center" title="حذف"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -602,6 +602,6 @@ document.addEventListener('keydown', e=>{
 // Expose for debugging
 window._DATA = DATA;
 window._save = saveData;
-document.body.style.background = "#F8FAF8";
-console.log("%c مكتب غرب القصيم للكهرباء - نظام المواقع جاهز ✓ ", "background:#0B6B3D;color:white;padding:8px 14px;border-radius:8px;font-weight:bold");
+document.body.style.background = "#F6F9FF";
+console.log("%c مكتب غرب القصيم للكهرباء - نظام المواقع جاهز ✓ ", "background:#0D5BBA;color:white;padding:8px 14px;border-radius:8px;font-weight:bold");
 
