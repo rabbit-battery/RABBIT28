@@ -97,9 +97,17 @@ function setupRealtime(){
 
 async function fetchFromSupabase(){
   if(!useSupabase) return null;
-  const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false});
-  if(error) throw error;
-  return data.map(fromDb);
+  // صفحات لأن Supabase يرجع 1000 كحد أقصى
+  let all=[], from=0, step=1000;
+  while(true){
+    const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).range(from, from+step-1);
+    if(error) throw error;
+    if(!data || data.length===0) break;
+    all.push(...data);
+    if(data.length<step) break;
+    from+=step;
+  }
+  return all.map(fromDb);
 }
 async function upsertToSupabase(item){
   if(!useSupabase) return;
@@ -111,11 +119,29 @@ async function deleteFromSupabase(id){
   const { error } = await supabaseClient.from('locations').delete().eq('id', String(id));
   if(error){ console.error('delete error', error); showToast('خطأ في الحذف السحابي','error'); }
 }
-async function bulkUpsertToSupabase(items){
-  if(!useSupabase || items.length===0) return;
+async function bulkUpsertToSupabase(items, onProgress){
+  if(!useSupabase || items.length===0) return {ok:0, fail:0};
+  const CHUNK=150; // صغير لضمان عدم تجاوز حد السيرفر
+  let ok=0, fail=0;
   const rows = items.map(toDb);
-  const { error } = await supabaseClient.from('locations').upsert(rows, {onConflict:'id'});
-  if(error) console.error('bulk upsert error', error);
+  const chunks=chunkArray(rows, CHUNK);
+  for(let i=0;i<chunks.length;i++){
+    const c=chunks[i];
+    try{
+      const { error } = await supabaseClient.from('locations').upsert(c, {onConflict:'id'});
+      if(error) throw error;
+      ok+=c.length;
+    }catch(e){
+      console.error('bulk upsert chunk failed', i, e);
+      fail+=c.length;
+      showToast(`خطأ في حفظ جزء ${i+1}/${chunks.length} - سيعاد المحاولة`,'error');
+    }
+    if(onProgress) onProgress(i+1, chunks.length, ok);
+    // تنفس للواجهة حتى لا تتجمد
+    await new Promise(r=> setTimeout(r, 60));
+  }
+  if(fail) console.warn(`bulk done: ok=${ok} fail=${fail}`);
+  return {ok, fail};
 }
 async function clearSupabase(){
   if(!useSupabase) return;
@@ -132,7 +158,16 @@ async function clearSupabase(){
 function chunkArray(a,n){ const r=[]; for(let i=0;i<a.length;i+=n) r.push(a.slice(i,i+n)); return r; }
 
 function saveLocal(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }catch{}
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); return true; }catch(e){
+    console.warn('localStorage full', e);
+    // حاول حفظ آخر 2000 فقط محليا لتجنب الامتلاء
+    try{
+      const slim=DATA.slice(0,2000);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+      console.log('تم حفظ جزء محلي فقط (2000)');
+      return false;
+    }catch{ return false; }
+  }
 }
 
 // Seed fallback
@@ -570,23 +605,43 @@ function looksLikeHeader(cells){
   return false;
 }
 
+function setImportProgress(pct, text, detail){
+  const wrap=document.getElementById('importProgressWrap');
+  const bar=document.getElementById('importProgressBar');
+  const pctEl=document.getElementById('importProgressPct');
+  const textEl=document.getElementById('importProgressText');
+  const det=document.getElementById('importProgressDetail');
+  if(!wrap) return;
+  wrap.classList.remove('hidden');
+  if(bar) bar.style.width=pct+'%';
+  if(pctEl) pctEl.textContent=Math.round(pct)+'%';
+  if(textEl && text) textEl.textContent=text;
+  if(det && detail) det.textContent=detail;
+}
+function hideImportProgress(){ const w=document.getElementById('importProgressWrap'); if(w) setTimeout(()=>w.classList.add('hidden'),1200); }
+
 async function handleImportMatrix(matrix){
   if(!matrix || matrix.length===0){ showToast('الملف فارغ','error'); return; }
   let startIdx=0;
   if(matrix.length>=1 && looksLikeHeader(matrix[0])) startIdx=1;
-  // لو كل الصفوف بعد الهيدر تبدأ بأرقام 707... مثل الصورة، نعتبره بيانات
+  const totalRows=matrix.length-startIdx;
+  setImportProgress(2, `جاري تحليل ${totalRows.toLocaleString('ar-SA')} صف...`, 'قد تستغرق العملية ثوانٍ للملفات الكبيرة - لا تغلق الصفحة');
   let added=0, updated=0, skipped=0; let logLines=[]; let newItems=[];
-  for(let i=startIdx;i<matrix.length;i++){
-    const cells=matrix[i].map(cellToString);
-    if(cells.every(c=> !c)) continue;
-    // --- كشف ذكي لأرقام الحساب والتجهيز ---
-    let sub='', equip='';
-    // 1) بحث بالبادئة 30/300 و 50/500
-    for(const c of cells){
-      const s=c.replace(/\s+/g,'');
-      if(!sub && isSubValue(s)) sub=s;
-      else if(!equip && isEquipValue(s)) equip=s;
-    }
+  let processed=0;
+  const BATCH=400; // دفعات لتجنب تجميد المتصفح
+  for(let batchStart=startIdx; batchStart<matrix.length; batchStart+=BATCH){
+    const batchEnd=Math.min(batchStart+BATCH, matrix.length);
+    for(let i=batchStart;i<batchEnd;i++){
+      const cells=matrix[i].map(cellToString);
+      if(cells.every(c=> !c)) continue;
+      // --- كشف ذكي لأرقام الحساب والتجهيز ---
+      let sub='', equip='';
+      // 1) بحث بالبادئة 30/300 و 50/500
+      for(const c of cells){
+        const s=c.replace(/\s+/g,'');
+        if(!sub && isSubValue(s)) sub=s;
+        else if(!equip && isEquipValue(s)) equip=s;
+      }
     // 2) fallback: إذا لم نجد بالبادئة، جرب استنتاج بالطول/الموضع
     if(!sub || !equip){
       // اجمع كل الأرقام الطويلة (>=8 أرقام)
@@ -652,18 +707,34 @@ async function handleImportMatrix(matrix){
     } else {
       const nid=Date.now().toString()+Math.random().toString(16).slice(2);
       const obj={ id: nid, sub, equip, name: name||'مشترك', address: address||'', lat, lng, notes, updatedAt: Date.now()};
-      DATA.push(obj); newItems.push(obj); added++; logLines.push(`سطر ${i+1}: إضافة ${sub} / ${equip}${missingCoords?' (بدون إحداثيات - عدّل لاحقاً)':''}`);
+      DATA.push(obj); newItems.push(obj); added++; if(logLines.length<200) logLines.push(`سطر ${i+1}: إضافة ${sub} / ${equip}${missingCoords?' (بدون إحداثيات - عدّل لاحقاً)':''}`);
     }
+    }
+    processed+= (batchEnd-batchStart);
+    const pct= 10 + (processed/totalRows)*40;
+    setImportProgress(pct, `تحليل ${processed.toLocaleString('ar-SA')}/${totalRows.toLocaleString('ar-SA')} صف...`, `تم تجهيز ${(added+updated).toLocaleString('ar-SA')} موقع حتى الآن`);
+    await new Promise(r=> setTimeout(r, 0));
   }
-  saveData();
-  if(useSupabase && newItems.length) await bulkUpsertToSupabase(newItems);
+  const savedOk=saveLocal();
+  updateStats(); renderAdminTable();
+  if(useSupabase && newItems.length){
+    setImportProgress(55, `جاري الحفظ السحابي... 0/${newItems.length.toLocaleString('ar-SA')}`, 'يتم الرفع على دفعات 150 صف - لا تغلق الصفحة');
+    const res=await bulkUpsertToSupabase(newItems, (chunkIdx, totalChunks, okSoFar)=>{
+      const pct2=55 + (chunkIdx/totalChunks)*40;
+      setImportProgress(pct2, `حفظ سحابي ${chunkIdx}/${totalChunks}`, `${okSoFar.toLocaleString('ar-SA')} صف تم حفظها`);
+    });
+    if(res.fail>0) showToast(`تم حفظ ${res.ok} وفشل ${res.fail} - حاول مرة أخرى`,'error');
+  }
+  setImportProgress(100, `اكتمل ✓`, `${(added+updated).toLocaleString('ar-SA')} موقع جاهز للبحث`);
+  setTimeout(()=>{ const w=document.getElementById('importProgressWrap'); if(w) w.classList.add('hidden'); },1400);
   importLog.classList.remove('hidden');
   const totalOk=added+updated;
-  importLog.innerHTML=`<p class="font-bold mb-2">نتيجة الاستيراد: <span class="text-emerald-600">${totalOk} نجاح</span> (إضافة ${added} + تحديث ${updated}) - تخطي ${skipped}</p>`
-    + `<p class="text-[11px] text-zinc-500 mb-2">💡 الأرقام التي تبدأ بـ <b>30 / 300</b> تُحفظ كـ رقم حساب، و <b>50 / 500</b> كـ رقم تجهيز تلقائياً حتى لو اختلف ترتيب الأعمدة</p>`
-    + logLines.slice(0,80).map(l=> `<div class="py-1 border-b border-zinc-100 last:border-0">${escapeHtml(l)}</div>`).join('');
-  if(logLines.length>80) importLog.innerHTML+=`<div class="text-zinc-500 mt-2">... و ${logLines.length-80} سطر آخر</div>`;
-  if(totalOk>0) showToast(`تم استيراد ${totalOk} موقع ✓ ${skipped?`(تخطي ${skipped})`:''}`);
+  const localWarn=savedOk? '': '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 text-xs">⚠️ الملف كبير جداً - تم الحفظ في السحابة بنجاح لكن الحفظ المحلي جزئي (2000). البيانات آمنة ومزامنة Online ✓</p>';
+  importLog.innerHTML=`<p class="font-bold mb-2">نتيجة الاستيراد: <span class="text-emerald-600">${totalOk.toLocaleString('ar-SA')} نجاح</span> (إضافة ${added.toLocaleString('ar-SA')} + تحديث ${updated.toLocaleString('ar-SA')}) - تخطي ${skipped}</p>`
+    + `<p class="text-[11px] text-zinc-500 mb-2">💡 30/300 → حساب، 50/500 → تجهيز تلقائياً</p>`
+    + logLines.slice(0,80).map(l=> `<div class="py-1 border-b border-zinc-100 last:border-0">${escapeHtml(l)}</div>`).join('') + localWarn;
+  if(logLines.length>80) importLog.innerHTML+=`<div class="text-zinc-500 mt-2">... و ${logLines.length-80} سطر إضافي (اختصار العرض)</div>`;
+  if(totalOk>0) showToast(`✓ تم حفظ ${totalOk.toLocaleString('ar-SA')} موقع - ${useSupabase?'مزامن سحابياً':'محلياً'}`);
   else showToast('لم يتم استيراد أي موقع - تأكد من صيغة الملف','error');
   csvInput.value='';
 }

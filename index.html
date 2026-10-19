@@ -338,7 +338,18 @@
               <button id="btnDownloadTemplate" class="flex-1 bg-white border border-zinc-200 px-5 py-3 rounded-xl font-bold text-sm hover:bg-zinc-50 flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> تحميل قالب Excel</button>
               <button id="btnClearAll" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i class="fa-solid fa-trash"></i> حذف الكل</button>
             </div>
-            <div id="importLog" class="hidden mt-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs font-mono max-h-32 overflow-auto"></div>
+            <!-- Progress for heavy files -->
+            <div id="importProgressWrap" class="hidden mt-4 bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <div class="flex items-center justify-between text-xs font-bold text-blue-900 mb-2">
+                <span id="importProgressText">جاري الحفظ...</span>
+                <span id="importProgressPct" class="bg-blue-600 text-white px-2 py-0.5 rounded-full">0%</span>
+              </div>
+              <div class="w-full bg-blue-100 rounded-full h-2.5 overflow-hidden">
+                <div id="importProgressBar" class="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300" style="width:0%"></div>
+              </div>
+              <p id="importProgressDetail" class="text-[11px] text-zinc-500 mt-2">الرجاء عدم إغلاق الصفحة حتى يكتمل الرفع</p>
+            </div>
+            <div id="importLog" class="hidden mt-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs font-mono max-h-40 overflow-auto"></div>
           </div>
 
           <!-- Filter -->
