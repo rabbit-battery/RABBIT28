@@ -111,27 +111,16 @@ async function fetchFromSupabase(limit=null){
     if(error) throw error;
     return (data||[]).map(fromDb);
   }
-<<<<<<< HEAD
   // لو العدد ضخم لا نحمل الكل - نكتفي بآخر 5000 فقط للعرض السريع
   const cnt = await getSupabaseCount();
   CLOUD_COUNT = cnt;
-=======
-  const cnt = await getSupabaseCount();
-  CLOUD_COUNT = cnt;
   updatePaginationUI();
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
   if(cnt > CLOUD_THRESHOLD){
     CLOUD_MODE = true;
     console.log(`☁️ وضع سحابي: ${cnt.toLocaleString('ar-SA')} موقع - البحث مباشر من السيرفر`);
     const badge=document.getElementById('supabaseBadge');
     if(badge) badge.textContent=`سحابي ☁️ ${cnt.toLocaleString('ar-SA')} موقع`;
-<<<<<<< HEAD
-    const { data } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).limit(200);
-    return (data||[]).map(fromDb);
-=======
-    // نحمل الصفحة الحالية فقط وليس 200 عشوائية
     return await fetchPage(0);
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
   }
   let all=[], from=0, step=1000;
   while(true){
@@ -248,11 +237,6 @@ function loadLocal(){
   }catch{ return null; }
 }
 
-<<<<<<< HEAD
-let DATA = [];
-
-// sync helpers
-=======
 let currentPage = 0;
 let pageSize = 200;
 let DATA = [];
@@ -269,9 +253,6 @@ function updatePaginationUI(){
     if(totalEl) totalEl.textContent = CLOUD_COUNT.toLocaleString('ar-SA');
     document.getElementById('prevPage').disabled = currentPage===0;
     document.getElementById('nextPage').disabled = currentPage>=totalPages-1;
-  } else if(DATA.length>0){
-    // وضع محلي صغير - نخفي الشريط
-    // bar.classList.add('hidden');
   }
 }
 async function fetchPage(page){
@@ -297,9 +278,22 @@ async function goToPage(page){
   showToast(`صفحة ${page+1} - ${pageData.length} موقع`);
   document.getElementById('adminDrawer')?.scrollTo({top:0, behavior:'smooth'});
 }
+async function fetchFromSupabaseAll(){
+  let all=[], from=0, step=1000;
+  while(true){
+    const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).range(from, from+step-1);
+    if(error) throw error;
+    if(!data || data.length===0) break;
+    all.push(...data.map(fromDb));
+    if(data.length<step) break;
+    from+=step;
+    if(all.length%5000===0) showToast(`تحميل ${all.length.toLocaleString('ar-SA')}...`);
+  }
+  return all;
+}
 
- // sync helpers
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
+
+// sync helpers
 function saveData(){
   saveLocal();
   updateStats();
@@ -583,21 +577,12 @@ async function duplicateItem(id){
   DATA.unshift(copy); saveData(); await upsertToSupabase(copy); showToast('تم النسخ ✓');
 }
 function renderAdminTable(){
-<<<<<<< HEAD
   const q=(adminSearch.value||'').trim().toLowerCase();
   let filtered=DATA;
-  if(q){
-    // في الوضع السحابي لو البحث فارغ لا نبحث في الـ 200 فقط - يبحث سحابياً عبر doSearch
-    filtered=DATA.filter(it=> it.sub.toLowerCase().includes(q) || it.equip.toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q) || (it.address||'').toLowerCase().includes(q));
-=======
   updatePaginationUI();
-  const q=(adminSearch.value||'').trim().toLowerCase();
-  let filtered=DATA;
   if(q){
     filtered=DATA.filter(it=> it.sub.toLowerCase().includes(q) || it.equip.toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q) || (it.address||'').toLowerCase().includes(q));
-    // لو في وضع سحابي والبحث لم يجد في الصفحة الحالية، ننبه
     if(CLOUD_MODE && filtered.length===0 && q.length>=3){
-      // بحث سحابي تلقائي
       searchSupabase(q).then(results=>{
         if(results.length>0){
           adminEmpty.classList.add('hidden');
@@ -605,7 +590,6 @@ function renderAdminTable(){
         }
       });
     }
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
   }
   const countEl=document.getElementById('adminFilteredCount'); if(countEl) countEl.textContent= (CLOUD_MODE? CLOUD_COUNT : filtered.length).toLocaleString('ar-SA');
   if(filtered.length===0){ adminTableBody.innerHTML=''; adminEmpty.classList.remove('hidden'); if(CLOUD_MODE) adminEmpty.innerHTML=`لا يوجد في الـ 200 المعروضة - استخدم البحث للبحث في ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع بالسحابة ☁️`; else adminEmpty.textContent='لا توجد بيانات مطابقة'; return; }
@@ -963,9 +947,6 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape'){ closeLogin(); closeAdmin(); }
 });
 
-<<<<<<< HEAD
-=======
-// Wire pagination buttons
 setTimeout(()=>{
   document.getElementById('prevPage')?.addEventListener('click', ()=> goToPage(currentPage-1));
   document.getElementById('nextPage')?.addEventListener('click', ()=> goToPage(currentPage+1));
@@ -981,21 +962,7 @@ setTimeout(()=>{
     showToast(`تم تحميل ${all.length} موقع`);
   });
 }, 500);
-async function fetchFromSupabaseAll(){
-  let all=[], from=0, step=1000;
-  while(true){
-    const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false}).range(from, from+step-1);
-    if(error) throw error;
-    if(!data || data.length===0) break;
-    all.push(...data.map(fromDb));
-    if(data.length<step) break;
-    from+=step;
-    if(all.length%5000===0) showToast(`تحميل ${all.length.toLocaleString('ar-SA')}...`);
-  }
-  return all;
-}
 
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
 // --- Init with Supabase - يدعم 500 ألف ---
 async function boot(){
   const local = loadLocal();
@@ -1007,22 +974,7 @@ async function boot(){
       const cnt = await getSupabaseCount();
       CLOUD_COUNT = cnt;
       if(cnt > CLOUD_THRESHOLD) CLOUD_MODE=true;
-<<<<<<< HEAD
       updateStats();
-      const remote = await fetchFromSupabase();
-      if(remote && remote.length>0){
-        // في الوضع السحابي لا نحتاج كل البيانات محليا
-        if(!CLOUD_MODE) DATA = remote;
-        else DATA = remote; // 200 فقط للعرض
-        saveLocal();
-        updateStats();
-        renderAdminTable();
-        if(CLOUD_MODE) showToast(`☁️ وضع سحابي مفعّل - ${CLOUD_COUNT.toLocaleString('ar-SA')} موقع - البحث مباشر من السيرفر ✓`);
-        else showToast(`متصل بقاعدة البيانات - ${DATA.length} موقع متزامن ✓`);
-      } else if(remote && remote.length===0){
-        if(local && local.length>0){
-=======
-      updateStats(); updatePaginationUI();
       const remote = await fetchFromSupabase();
       if(remote && remote.length>0){
         DATA = remote;
@@ -1033,11 +985,9 @@ async function boot(){
         else showToast(`متصل بقاعدة البيانات - ${DATA.length} موقع متزامن ✓`);
       } else if(!remote || remote.length===0){
         if(CLOUD_COUNT===0){
-          // السحابة فاضية بعد المسح - نعرض رسالة واضحة
           DATA=[]; saveLocal(); updateStats(); renderAdminTable();
           showToast('السحابة فارغة الآن - 0 موقع. يمكنك رفع ملف جديد ✓');
         } else if(local && local.length>0){
->>>>>>> 1dc6dff (feat: مسح السحابة (0 موقع) + إصلاح عرض 70k بإضافة صفحات - pagination 200/500/1000)
           await bulkUpsertToSupabase(local);
           showToast('تمت مزامنة البيانات المحلية إلى السحابة ✓');
         }
