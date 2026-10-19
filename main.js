@@ -469,8 +469,8 @@ const btnExport=document.getElementById('btnExport');
 if(btnExport) btnExport.addEventListener('click', exportCSV);
 const btnTemplate=document.getElementById('btnDownloadTemplate');
 if(btnTemplate) btnTemplate.addEventListener('click', ()=>{
-  const csv='رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات\n3009990001,EQ-9999,مثال اسم المشترك,بريدة - حي المطار,26.3260,43.9750,ملاحظة تجريبية\n';
-  downloadFile(csv,'قالب_غرب_القصيم.csv','text/csv;charset=utf-8;'); showToast('تم تحميل القالب ✓');
+  const csv='رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات\n30002845062,5009864858,مثال مستفيد - بريدة,بريدة - حي المطار - شارع الملك عبدالعزيز,26.3260,43.9750,عداد داخل السور\n3001234567,5001122334,عبدالله الحربي,عنيزة - الفيحاء,26.0848,43.9936,\n7078401,30002845063,5009864859,اختبار استيراد بثلاثة أعمدة,26.2000,43.8000,\n';
+  downloadFile(csv,'قالب_غرب_القصيم_الذكي.csv','text/csv;charset=utf-8;'); showToast('تم تحميل القالب الذكي ✓ - يدعم 30/500');
 });
 function exportCSV(){
   const header='رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات,آخر تحديث';
@@ -481,44 +481,222 @@ function exportCSV(){
 function downloadFile(content, filename, mime){
   const blob=new Blob(["\ufeff"+content], {type:mime}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
+// === استيراد ذكي: يدعم أرقام 30/300 و 50/500 + Excel + CSV بكل الصيغ ===
 const csvInput=document.getElementById('csvInput');
 const importLog=document.getElementById('importLog');
-if(csvInput) csvInput.addEventListener('change', async (e)=>{
-  const file=e.target.files[0]; if(!file) return;
-  const text=await file.text(); const clean=text.replace(/^\ufeff/,''); const lines=clean.split(/\r?\n/).filter(l=> l.trim());
-  if(lines.length<2){ showToast('الملف فارغ أو غير صحيح','error'); return; }
-  const header=lines[0]; const hasArabicHeader=header.includes('رقم الاشتراك'); let startIdx=hasArabicHeader?1:0;
-  let added=0, skipped=0; let logLines=[]; let newItems=[];
-  for(let i=startIdx;i<lines.length;i++){
-    const line=lines[i]; const cols=parseCSVLine(line);
-    if(cols.length<4){ skipped++; logLines.push(`سطر ${i+1}: أعمدة ناقصة`); continue; }
-    let sub=(cols[0]||'').trim(); let equip=(cols[1]||'').trim(); let name=(cols[2]||'').trim(); let address=(cols[3]||'').trim(); let lat=parseFloat(cols[4]); let lng=parseFloat(cols[5]); let notes=(cols[6]||'').trim();
-    if(!sub||!equip){ skipped++; logLines.push(`سطر ${i+1}: رقم الاشتراك/التجهيز مفقود`); continue; }
-    if(isNaN(lat)||isNaN(lng)){ const nums=line.match(/-?\d+\.\d+/g); if(nums&&nums.length>=2){ lat=parseFloat(nums[nums.length-2]); lng=parseFloat(nums[nums.length-1]); } }
-    if(isNaN(lat)||isNaN(lng)){ skipped++; logLines.push(`سطر ${i+1}: إحداثيات غير صحيحة`); continue; }
-    const existingIdx=DATA.findIndex(x=> x.sub===sub);
+
+// تحويل خلية Excel لرقم نصي بدون فقدان + بدون علمي
+function cellToString(v){
+  if(v==null) return '';
+  if(typeof v==='number'){
+    let s=String(v);
+    if(s.includes('e')||s.includes('E')) s=v.toFixed(0);
+    else if(Number.isInteger(v)) s=String(Math.trunc(v));
+    // إزالة .0 الزائدة
+    if(s.endsWith('.0')) s=s.slice(0,-2);
+    return s.trim();
+  }
+  return String(v).trim();
+}
+function isSubValue(s){
+  s=cellToString(s).replace(/\s+/g,'');
+  if(!s) return false;
+  // رقم الحساب يبدأ 30 أو 300 أو 3xxx وطوله 8-12
+  return /^300\d{6,9}$/.test(s) || /^30\d{6,10}$/.test(s) || /^3\d{7,11}$/.test(s);
+}
+function isEquipValue(s){
+  s=cellToString(s).replace(/\s+/g,'');
+  if(!s) return false;
+  return /^500\d{6,9}$/.test(s) || /^50\d{6,10}$/.test(s) || /^5\d{7,11}$/.test(s);
+}
+function detectDelimiter(text){
+  const first=text.split(/\r?\n/).find(l=>l.trim())||'';
+  const counts={',':(first.match(/,/g)||[]).length, ';':(first.match(/;/g)||[]).length, '\t':(first.match(/\t/g)||[]).length};
+  let best=',', max=counts[','];
+  if(counts[';']>max){best=';'; max=counts[';'];}
+  if(counts['\t']>max){best='\t'; max=counts['\t'];}
+  // لو لا يوجد فاصل واضح لكن يوجد مسافات متعددة
+  if(max===0 && /\s{2,}/.test(first)) return 'SPACE';
+  return best;
+}
+function parseLineWithDelimiter(line, delim){
+  if(delim==='SPACE') return line.trim().split(/\s+/);
+  // فاصل عادي مع احترام علامات الاقتباس
+  const cols=[]; let cur=''; let inQuote=false;
+  for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQuote && line[i+1]==='"'){ cur+='"'; i++; } else inQuote=!inQuote; } else if(ch===delim && !inQuote){ cols.push(cur); cur=''; } else cur+=ch; }
+  cols.push(cur); return cols.map(c=> c.trim().replace(/^"|"$/g,''));
+}
+function parseCSVLinesSmart(text){
+  const clean=text.replace(/^\ufeff/,'').trim();
+  if(!clean) return [];
+  const delim=detectDelimiter(clean);
+  const rawLines=clean.split(/\r?\n/).filter(l=> l.trim()!=='');
+  return rawLines.map(l=> parseLineWithDelimiter(l, delim));
+}
+function extractLatLng(cells){
+  // ابحث عن رقمين عشريين في النطاق الصحيح
+  const nums=[];
+  for(const c of cells){
+    const s=cellToString(c);
+    const matches=s.match(/-?\d+\.\d+/g);
+    if(matches) nums.push(...matches);
+  }
+  // أيضا الخلايا نفسها لو كانت رقم عشري مباشر
+  for(let i=cells.length-1;i>=0;i--){
+    const v=parseFloat(cellToString(cells[i]));
+    if(!isNaN(v) && String(cells[i]).includes('.')) nums.push(String(v));
+  }
+  // نحاول أخذ آخر رقمين يمثلان إحداثيات السعودية تقريبا
+  for(let i=nums.length-1;i>=1;i--){
+    const lat=parseFloat(nums[i-1]), lng=parseFloat(nums[i]);
+    if(isNaN(lat)||isNaN(lng)) continue;
+    if(lat>=16 && lat<=33 && lng>=34 && lng<=50) return {lat,lng};
+  }
+  // fallback: أي رقمين في النطاق العام
+  if(nums.length>=2){
+    const lat=parseFloat(nums[nums.length-2]), lng=parseFloat(nums[nums.length-1]);
+    if(lat>=-90&&lat<=90 && lng>=-180&&lng<=180) return {lat,lng};
+  }
+  return null;
+}
+function looksLikeHeader(cells){
+  const joined=cells.join(' ').toLowerCase();
+  if(joined.includes('رقم الاشتراك')||joined.includes('رقم التجهيز')||joined.includes('رقم الحساب')||joined.includes('sub')||joined.includes('equip')||joined.includes('account')||joined.includes('lat')||joined.includes('lng')||joined.includes('خط العرض')||joined.includes('خط الطول')) return true;
+  // لو الصف الأول لا يحتوي أرقام 30/500 يعتبر هيدر
+  const hasSub=cells.some(c=> isSubValue(c));
+  const hasEquip=cells.some(c=> isEquipValue(c));
+  const hasCoord=cells.some(c=> !isNaN(parseFloat(cellToString(c))) && cellToString(c).includes('.') && parseFloat(cellToString(c))>10);
+  if(!hasSub && !hasEquip && !hasCoord) return true;
+  return false;
+}
+
+async function handleImportMatrix(matrix){
+  if(!matrix || matrix.length===0){ showToast('الملف فارغ','error'); return; }
+  let startIdx=0;
+  if(matrix.length>=1 && looksLikeHeader(matrix[0])) startIdx=1;
+  // لو كل الصفوف بعد الهيدر تبدأ بأرقام 707... مثل الصورة، نعتبره بيانات
+  let added=0, updated=0, skipped=0; let logLines=[]; let newItems=[];
+  for(let i=startIdx;i<matrix.length;i++){
+    const cells=matrix[i].map(cellToString);
+    if(cells.every(c=> !c)) continue;
+    // --- كشف ذكي لأرقام الحساب والتجهيز ---
+    let sub='', equip='';
+    // 1) بحث بالبادئة 30/300 و 50/500
+    for(const c of cells){
+      const s=c.replace(/\s+/g,'');
+      if(!sub && isSubValue(s)) sub=s;
+      else if(!equip && isEquipValue(s)) equip=s;
+    }
+    // 2) fallback: إذا لم نجد بالبادئة، جرب استنتاج بالطول/الموضع
+    if(!sub || !equip){
+      // اجمع كل الأرقام الطويلة (>=8 أرقام)
+      const numbers=cells.map(c=> c.replace(/[^0-9]/g,'')).filter(s=> s.length>=7);
+      if(numbers.length>=2){
+        // الأكبر طولا أو يبدأ 500 هو التجهيز
+        const sorted=[...numbers].sort((a,b)=> b.length-a.length);
+        for(const n of numbers){
+          if(!equip && (n.startsWith('500')||n.startsWith('50'))) equip=n;
+        }
+        for(const n of numbers){
+          if(!sub && (n.startsWith('300')||n.startsWith('30'))) sub=n;
+        }
+        // لو ما زال ناقص، افترض أول رقمين
+        if(!sub && numbers[0]) sub=numbers[0];
+        if(!equip && numbers[1]) equip=numbers[1];
+      }
+      // fallback نهائي: عمودين أوليين
+      if(!sub) sub=cellToString(cells[0]);
+      if(!equip) equip=cellToString(cells[1]);
+    }
+    sub=(sub||'').trim().replace(/\s+/g,'');
+    equip=(equip||'').trim().replace(/\s+/g,'');
+
+    if(!sub || !equip){ skipped++; logLines.push(`سطر ${i+1}: تخطي - لم نعثر على رقم حساب/تجهيز (وجد: ${cells.slice(0,3).join(' | ')})`); continue; }
+
+    // اسم/عنوان/ملاحظات: خذ أي خلايا نصية ليست أرقام
+    let name='', address='', notes='';
+    const textCells=cells.filter(c=> c && isNaN(Number(c.replace(/\s+/g,''))) && !isSubValue(c) && !isEquipValue(c) && !c.includes('.'));
+    // حاول التقاط النصوص الطويلة
+    if(textCells.length>=1) name=textCells[0];
+    if(textCells.length>=2) address=textCells.slice(1).join(' - ');
+    // لو كان هناك عمود نصي واضح بعد الأرقام
+    // lat/lng
+    let ll=extractLatLng(cells);
+    let lat= ll? ll.lat : NaN;
+    let lng= ll? ll.lng : NaN;
+    // لو لم نجد إحداثيات، نحاول أخذ العمود 4 و 5 مباشرة (لو الملف فيه إحداثيات)
+    if(isNaN(lat)){
+      // جرب الأعمدة 3،4 كأرقام عشرية
+      for(let k=0;k<cells.length;k++){
+        const v=parseFloat(cellToString(cells[k]));
+        const hasDot=String(cells[k]).includes('.');
+        if(!isNaN(v) && hasDot && v>=16 && v<=33){
+          const v2=parseFloat(cellToString(cells[k+1]));
+          if(!isNaN(v2) && v2>=34 && v2<=50){ lat=v; lng=v2; break; }
+        }
+      }
+    }
+
+    // إذا ما زالت الإحداثيات مفقودة، نسمح بالاستيراد لكن نضع 0,0 مع تنبيه
+    let missingCoords=false;
+    if(isNaN(lat)||isNaN(lng)){ lat=0; lng=0; missingCoords=true; notes=(notes? notes+' | ':'')+'⚠️ يحتاج تحديث إحداثيات'; }
+
+    const existingIdx=DATA.findIndex(x=> String(x.sub)===String(sub));
     if(existingIdx>-1){
-      DATA[existingIdx]={...DATA[existingIdx], equip, name: name||DATA[existingIdx].name, address, lat, lng, notes, updatedAt: Date.now()};
+      const prev=DATA[existingIdx];
+      // لو الإحداثيات مفقودة احتفظ بالقديمة إن وجدت
+      if(missingCoords && prev.lat && prev.lng){ lat=prev.lat; lng=prev.lng; }
+      DATA[existingIdx]={...prev, sub, equip, name: name||prev.name, address: address||prev.address, lat, lng, notes: notes||prev.notes, updatedAt: Date.now()};
       newItems.push(DATA[existingIdx]);
-      added++; logLines.push(`سطر ${i+1}: تحديث ${sub}`);
+      updated++; logLines.push(`سطر ${i+1}: تحديث ${sub} / ${equip}${missingCoords?' (بدون إحداثيات)':''}`);
     } else {
       const nid=Date.now().toString()+Math.random().toString(16).slice(2);
-      const obj={ id: nid, sub, equip, name: name||'مشترك', address, lat, lng, notes, updatedAt: Date.now()};
-      DATA.push(obj); newItems.push(obj); added++; logLines.push(`سطر ${i+1}: إضافة ${sub}`);
+      const obj={ id: nid, sub, equip, name: name||'مشترك', address: address||'', lat, lng, notes, updatedAt: Date.now()};
+      DATA.push(obj); newItems.push(obj); added++; logLines.push(`سطر ${i+1}: إضافة ${sub} / ${equip}${missingCoords?' (بدون إحداثيات - عدّل لاحقاً)':''}`);
     }
   }
   saveData();
-  if(useSupabase) await bulkUpsertToSupabase(newItems);
+  if(useSupabase && newItems.length) await bulkUpsertToSupabase(newItems);
   importLog.classList.remove('hidden');
-  importLog.innerHTML=`<p class="font-bold mb-1">نتيجة الاستيراد: ${added} تم، ${skipped} تخطي</p>`+logLines.map(l=> `<div>${escapeHtml(l)}</div>`).join('');
-  showToast(`تم استيراد ${added} موقع${skipped?` - تخطي ${skipped}`:''} ✓`);
+  const totalOk=added+updated;
+  importLog.innerHTML=`<p class="font-bold mb-2">نتيجة الاستيراد: <span class="text-emerald-600">${totalOk} نجاح</span> (إضافة ${added} + تحديث ${updated}) - تخطي ${skipped}</p>`
+    + `<p class="text-[11px] text-zinc-500 mb-2">💡 الأرقام التي تبدأ بـ <b>30 / 300</b> تُحفظ كـ رقم حساب، و <b>50 / 500</b> كـ رقم تجهيز تلقائياً حتى لو اختلف ترتيب الأعمدة</p>`
+    + logLines.slice(0,80).map(l=> `<div class="py-1 border-b border-zinc-100 last:border-0">${escapeHtml(l)}</div>`).join('');
+  if(logLines.length>80) importLog.innerHTML+=`<div class="text-zinc-500 mt-2">... و ${logLines.length-80} سطر آخر</div>`;
+  if(totalOk>0) showToast(`تم استيراد ${totalOk} موقع ✓ ${skipped?`(تخطي ${skipped})`:''}`);
+  else showToast('لم يتم استيراد أي موقع - تأكد من صيغة الملف','error');
   csvInput.value='';
-});
-function parseCSVLine(line){
-  const cols=[]; let cur=''; let inQuote=false;
-  for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQuote && line[i+1]==='"'){ cur+='"'; i++; } else inQuote=!inQuote; } else if(ch===',' && !inQuote){ cols.push(cur); cur=''; } else cur+=ch; }
-  cols.push(cur); return cols.map(c=> c.trim().replace(/^"|"$/g,''));
 }
+
+if(csvInput) csvInput.addEventListener('change', async (e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  showToast('جاري قراءة الملف...');
+  try{
+    const name=file.name.toLowerCase();
+    let matrix=[];
+    if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+      if(!window.XLSX){ showToast('مكتبة Excel غير محملة - حدّث الصفحة','error'); return; }
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf, {type:'array'});
+      const sheetName=wb.SheetNames[0];
+      const ws=wb.Sheets[sheetName];
+      // raw:true يحافظ على الأرقام الكبيرة
+      matrix=window.XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:'', blankrows:false});
+      // تحويل كل خلية لنص محفوظ
+      matrix=matrix.map(row=> row.map(cellToString));
+    } else {
+      const text=await file.text();
+      const clean=text.replace(/^\ufeff/,'');
+      matrix=parseCSVLinesSmart(clean);
+    }
+    await handleImportMatrix(matrix);
+  }catch(err){
+    console.error(err);
+    showToast('خطأ في قراءة الملف: '+err.message,'error');
+    importLog.classList.remove('hidden');
+    importLog.innerHTML=`<p class="text-red-600 font-bold">خطأ: ${escapeHtml(err.message)}</p><p class="text-xs mt-2">تأكد أن الملف CSV بترميز UTF-8 أو Excel .xlsx وأن الأرقام تبدأ بـ 30/500</p>`;
+  }
+});
 const btnClearAll=document.getElementById('btnClearAll');
 if(btnClearAll) btnClearAll.addEventListener('click', async ()=>{
   if(!confirm('هل أنت متأكد من حذف جميع المواقع؟ لا يمكن التراجع!')) return;

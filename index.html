@@ -329,11 +329,11 @@
           <!-- Bulk Upload -->
           <div class="bg-white rounded-[20px] border border-zinc-200 p-5">
             <h4 class="font-black text-sm flex items-center gap-2"><i class="fa-solid fa-file-csv text-blue-600"></i> رفع جماعي (Excel / CSV)</h4>
-            <p class="text-xs text-zinc-500 mt-1">ارفع ملف CSV بترميز UTF-8 بالأعمدة: <b>رقم الاشتراك, رقم التجهيز, اسم المشترك, العنوان, lat, lng, ملاحظات</b></p>
+            <p class="text-xs text-zinc-500 mt-1">ذكي: يتعرف تلقائياً على <b class="text-primary">30 / 300 → رقم حساب</b> و <b class="text-primary">50 / 500 → رقم تجهيز</b> مهما كان ترتيب الأعمدة • يدعم CSV و Excel • الفاصل `,` أو `;` أو Tab</p>
             <div class="flex flex-col sm:flex-row gap-3 mt-4">
               <label class="flex-1 bg-zinc-900 hover:bg-black text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition">
-                <i class="fa-solid fa-upload"></i> اختر ملف CSV
-                <input id="csvInput" type="file" accept=".csv,.xlsx,.xls" class="hidden">
+                <i class="fa-solid fa-upload"></i> اختر ملف CSV / Excel
+                <input id="csvInput" type="file" accept=".csv,.xlsx,.xls,.txt" class="hidden">
               </label>
               <button id="btnDownloadTemplate" class="flex-1 bg-white border border-zinc-200 px-5 py-3 rounded-xl font-bold text-sm hover:bg-zinc-50 flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> تحميل قالب Excel</button>
               <button id="btnClearAll" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i class="fa-solid fa-trash"></i> حذف الكل</button>
@@ -387,6 +387,8 @@
     <div id="toastInner" class="bg-zinc-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 min-w-[280px] justify-center"></div>
   </div>
 
+  <!-- Excel Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
   <script>
