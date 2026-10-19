@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مكتب غرب القصيم للكهرباء | نظام تتبع المواقع</title>
+  <meta name="description" content="نظام تتبع مواقع المشتركين لمكتب غرب القصيم للكهرباء - بحث سريع برقم الاشتراك أو رقم التجهيز">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { tajawal: ['Tajawal', 'sans-serif'] },
+          colors: {
+            primary: '#0D5BBA',
+            primaryDark: '#0A3E8A',
+            primaryLight: '#E9F0FF',
+            accent: '#2EA8FF',
+            accentDark: '#0B7BCE',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *{font-family:'Tajawal',sans-serif}
+    .glass{background:rgba(255,255,255,0.92);backdrop-filter:blur(12px)}
+    .pattern-bg{background-image: radial-gradient(circle at 1px 1px, rgba(13,91,186,0.06) 1px, transparent 0); background-size: 22px 22px;}
+    .hide-scrollbar::-webkit-scrollbar{display:none}
+    @keyframes slideIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .animate-in{animation:slideIn .4s ease}
+    .map-iframe{border:0;width:100%;height:100%;border-radius:16px}
+  </style>
+  <script type="module" crossorigin src="/RABBIT28/assets/index-BJIWHzw_.js"></script>
+</head>
+<body class="bg-[#F6F9FF] text-zinc-800 pattern-bg min-h-screen">
+
+  <!-- Top Bar -->
+  <div class="bg-primary text-white text-[12.5px] py-2 px-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <span class="flex items-center gap-2"><i class="fa-solid fa-location-dot text-accent"></i> بريدة - غرب القصيم - المملكة العربية السعودية</span>
+        <a href="tel:0548699447" class="hidden md:flex items-center gap-2 hover:text-accent transition"><i class="fa-solid fa-phone text-accent"></i> 0548699447</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="hidden sm:inline opacity-90">نظام معتمد من الشركة السعودية للكهرباء</span>
+        <span id="supabaseBadge" class="bg-amber-400 text-zinc-900 px-3 py-1 rounded-full text-xs font-black animate-pulse">جاري الاتصال بقاعدة البيانات...</span>
+        <span class="bg-white/15 px-3 py-1 rounded-full text-xs hidden sm:inline"><i class="fa-solid fa-shield-halved ml-1"></i> نظام آمن</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-zinc-100 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primaryDark flex items-center justify-center text-white shadow-lg shadow-primary/20">
+          <i class="fa-solid fa-bolt text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-[17px] font-extrabold leading-none text-zinc-900">مكتب غرب القصيم للكهرباء</h1>
+          <p class="text-[12px] text-zinc-500 mt-1 font-medium tracking-wide">West Al-Qassim Electricity Office • نظام إدارة المواقع</p>
+        </div>
+        <span class="hidden lg:inline-flex ml-2 bg-primaryLight text-primary text-xs font-bold px-3 py-1.5 rounded-full border border-primary/10">الإصدار 2.0</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnTech" class="hidden sm:flex items-center gap-2 bg-zinc-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-black transition">
+          <i class="fa-solid fa-magnifying-glass"></i> بحث الفني
+        </button>
+        <button id="btnAdmin" class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primaryDark transition shadow-lg shadow-primary/15">
+          <i class="fa-solid fa-user-gear"></i> <span class="hidden sm:inline">دخول المالك</span><span class="sm:hidden">المالك</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero / Search Section -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 pt-6 pb-4">
+    <!-- Stats Bar -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><i class="fa-solid fa-database"></i></div>
+        <div><p class="text-[11px] text-zinc-500 font-bold tracking-wider">إجمالي المواقع</p><p id="statTotal" class="text-xl font-black">0</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600"><i class="fa-solid fa-signal"></i></div>
+        <div><p class="text-[11px] text-zinc-500 font-bold">حالة النظام</p><p class="text-sm font-black text-blue-600 flex items-center gap-1.5"><span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> متصل - Online</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600"><i class="fa-solid fa-clock"></i></div>
+        <div><p class="text-[11px] text-zinc-500 font-bold">آخر تحديث</p><p id="statUpdate" class="text-xs font-bold">اليوم</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 border border-zinc-100 flex items-center gap-3 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-primaryLight flex items-center justify-center text-primary"><i class="fa-solid fa-headset"></i></div>
+        <div><p class="text-[11px] text-zinc-500 font-bold">الدعم الفني</p><p class="text-xs font-bold">24/7 متاح</p></div>
+      </div>
+    </div>
+
+    <!-- Main Search Card -->
+    <div class="bg-gradient-to-br from-primary via-primary to-primaryDark rounded-[24px] p-6 md:p-8 text-white relative overflow-hidden shadow-2xl shadow-primary/25">
+      <!-- deco -->
+      <div class="absolute -left-16 -top-16 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+      <div class="absolute -right-10 -bottom-10 w-80 h-80 bg-accent/15 rounded-full blur-3xl"></div>
+      <div class="absolute inset-0 opacity-[0.07]" style="background-image:url('https://www.transparenttextures.com/patterns/cubes.png')"></div>
+
+      <div class="relative z-10">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div>
+            <div class="inline-flex items-center gap-2 bg-white/15 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold mb-3 border border-white/15">
+              <i class="fa-solid fa-wand-magic-sparkles text-accent"></i> البحث الذكي للفنيين
+            </div>
+            <h2 class="text-2xl md:text-[28px] font-black leading-tight">ابحث عن موقع المشترك في ثوانٍ</h2>
+            <p class="text-white/80 text-sm mt-2 max-w-xl">أدخل <b class="text-white">رقم الاشتراك</b> أو <b class="text-white">رقم التجهيز</b> وسيظهر لك الموقع مباشرة مع رابط فتح الخريطة على Google Maps</p>
+          </div>
+          <div class="hidden md:flex items-center gap-3 bg-white text-zinc-800 rounded-2xl px-4 py-3 shadow-xl">
+            <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white"><i class="fa-solid fa-qrcode"></i></div>
+            <div class="text-right">
+              <p class="text-xs text-zinc-500 font-bold">امسح للمشاركة</p>
+              <p class="text-xs font-black">شارك النظام مع الفنيين</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Box -->
+        <div class="bg-white rounded-[20px] p-3 md:p-4 shadow-2xl flex flex-col md:flex-row gap-3 items-stretch relative">
+          <div class="flex-1 relative">
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400"><i class="fa-solid fa-magnifying-glass text-lg"></i></span>
+            <input id="searchInput" type="text" placeholder="مثال: 3001234567  أو  EQ-8841  أو  7005..." class="w-full pr-11 pl-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-2xl outline-none focus:border-primary focus:bg-white text-[15px] font-bold placeholder:text-zinc-400 text-zinc-800 transition" />
+            <div class="absolute left-3 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1">
+              <span class="text-[10px] bg-zinc-900 text-white px-2 py-1 rounded-lg font-bold">Enter</span>
+            </div>
+          </div>
+          <button id="searchBtn" class="bg-primary hover:bg-primaryDark text-white px-8 py-3.5 rounded-2xl font-black text-[15px] transition flex items-center justify-center gap-2 shadow-lg shadow-primary/20 shrink-0">
+            <i class="fa-solid fa-location-crosshairs"></i> عرض الموقع
+          </button>
+          <button id="clearBtn" class="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-6 py-3.5 rounded-2xl font-bold text-sm transition shrink-0">
+            مسح
+          </button>
+        </div>
+
+        <!-- Quick Tips -->
+        <div class="flex flex-wrap gap-2 mt-4">
+          <span class="text-xs text-white/70 font-bold">جرب البحث بـ:</span>
+          <button class="chip bg-white/15 hover:bg-white/25 border border-white/15 text-white px-3 py-1.5 rounded-full text-xs font-bold transition" data-example="3001234567">3001234567</button>
+          <button class="chip bg-white/15 hover:bg-white/25 border border-white/15 text-white px-3 py-1.5 rounded-full text-xs font-bold transition" data-example="EQ-10234">EQ-10234</button>
+          <button class="chip bg-white/15 hover:bg-white/25 border border-white/15 text-white px-3 py-1.5 rounded-full text-xs font-bold transition" data-example="700512">700512</button>
+          <button class="chip bg-white/15 hover:bg-white/25 border border-white/15 text-white px-3 py-1.5 rounded-full text-xs font-bold transition" data-example="302998">302998</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Results Area -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-8">
+    <!-- Default state -->
+    <div id="emptyState" class="bg-white rounded-[20px] border border-zinc-100 p-8 md:p-10 text-center shadow-sm">
+      <div class="w-16 h-16 mx-auto bg-primaryLight rounded-2xl flex items-center justify-center text-primary text-2xl mb-4"><i class="fa-solid fa-map-location-dot"></i></div>
+      <h3 class="font-black text-lg">جاهز للبحث</h3>
+      <p class="text-sm text-zinc-500 mt-1 max-w-lg mx-auto">اكتب رقم الاشتراك أو رقم التجهيز أعلاه وسيظهر لك تفاصيل الموقع مع إمكانية فتحه مباشرة في Google Maps وتطبيق الملاحة</p>
+      <div class="grid md:grid-cols-3 gap-3 mt-6 text-right max-w-3xl mx-auto">
+        <div class="bg-zinc-50 rounded-2xl p-4 border border-zinc-100 flex gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-500 text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-1 text-xs"></i></div>
+          <div><p class="text-sm font-bold">أدخل الرقم</p><p class="text-xs text-zinc-500">رقم الاشتراك أو التجهيز</p></div>
+        </div>
+        <div class="bg-zinc-50 rounded-2xl p-4 border border-zinc-100 flex gap-3">
+          <div class="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-2 text-xs"></i></div>
+          <div><p class="text-sm font-bold">اعرض الموقع</p><p class="text-xs text-zinc-500">تفاصيل كاملة + إحداثيات</p></div>
+        </div>
+        <div class="bg-zinc-50 rounded-2xl p-4 border border-zinc-100 flex gap-3">
+          <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0"><i class="fa-solid fa-3 text-xs"></i></div>
+          <div><p class="text-sm font-bold">افتح في جوجل</p><p class="text-xs text-zinc-500">انتقال فوري للخرائط</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Container -->
+    <div id="resultsContainer" class="hidden space-y-4"></div>
+
+    <!-- No results -->
+    <div id="noResults" class="hidden bg-white rounded-[20px] border border-amber-200 p-8 text-center shadow-sm">
+      <div class="w-14 h-14 mx-auto bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 text-xl mb-3"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <h3 class="font-black">لم يتم العثور على نتائج</h3>
+      <p class="text-sm text-zinc-500 mt-1">تأكد من الرقم المدخل أو تواصل مع الإدارة لتحديث البيانات</p>
+      <p id="noResultsQuery" class="text-xs bg-zinc-50 inline-block px-3 py-1.5 rounded-full mt-3 font-mono border"></p>
+    </div>
+  </section>
+
+  <!-- Contact Section - 0548699447 -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-6">
+    <div class="bg-white rounded-[20px] border border-zinc-100 shadow-sm p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primaryDark flex items-center justify-center text-white text-xl shadow-lg"><i class="fa-solid fa-headset"></i></div>
+        <div>
+          <h3 class="font-black text-[15px]">تواصل معنا مباشرة</h3>
+          <p class="text-xs text-zinc-500 mt-1">للاستفسار عن المواقع أو تحديث البيانات — مكتب غرب القصيم للكهرباء</p>
+          <p class="mt-3 flex flex-wrap gap-2">
+            <a href="tel:0548699447" class="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-primaryDark transition shadow"><i class="fa-solid fa-phone"></i> 0548699447 - اتصال</a>
+            <a href="https://wa.me/966548699447?text=السلام%20عليكم%20-%20استفسار%20عن%20موقع%20مشترك%20في%20غرب%20القصيم" target="_blank" class="inline-flex items-center gap-2 bg-[#25D366] text-white px-5 py-2.5 rounded-xl font-black text-sm hover:bg-[#20BA5A] transition shadow"><i class="fa-brands fa-whatsapp text-lg"></i> واتساب</a>
+          </p>
+        </div>
+      </div>
+      <div class="text-left bg-zinc-50 border border-zinc-100 rounded-2xl px-6 py-4">
+        <p class="text-[11px] font-bold text-zinc-500">رقم التواصل الموحد</p>
+        <p class="text-2xl font-black font-mono tracking-wide text-primary">0548699447</p>
+        <p class="text-[11px] text-zinc-500 mt-1">متاح 24/7 للفنيين والعملاء</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Info Section -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-10">
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-[20px] p-6 border border-zinc-100 shadow-sm">
+        <div class="w-11 h-11 rounded-xl bg-primary text-white flex items-center justify-center mb-3"><i class="fa-solid fa-mobile-screen"></i></div>
+        <h4 class="font-black text-sm">يعمل على الجوال والكمبيوتر</h4>
+        <p class="text-xs text-zinc-500 mt-1 leading-relaxed">الموقع متجاوب 100% ويعمل بدون تثبيت تطبيق - فقط افتح الرابط وابدأ البحث.</p>
+      </div>
+      <div class="bg-white rounded-[20px] p-6 border border-zinc-100 shadow-sm">
+        <div class="w-11 h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center mb-3"><i class="fa-solid fa-satellite-dish"></i></div>
+        <h4 class="font-black text-sm">تحديث فوري Online</h4>
+        <p class="text-xs text-zinc-500 mt-1 leading-relaxed">عندما يحدث المالك أي موقع، يظهر التحديث فوراً لدى جميع الفنيين بدون تحديث يدوي.</p>
+      </div>
+      <div class="bg-white rounded-[20px] p-6 border border-zinc-100 shadow-sm">
+        <div class="w-11 h-11 rounded-xl bg-accent text-white flex items-center justify-center mb-3"><i class="fa-solid fa-map"></i></div>
+        <h4 class="font-black text-sm">فتح مباشر في Google Maps</h4>
+        <p class="text-xs text-zinc-500 mt-1 leading-relaxed">زر واحد ينقلك للتطبيق مع الإحداثيات الدقيقة وبدء الملاحة الصوتية.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-gradient-to-br from-[#0A3E8A] to-[#0D5BBA] text-white mt-6 border-t border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-white text-primary flex items-center justify-center shadow-lg"><i class="fa-solid fa-bolt"></i></div>
+          <div>
+            <p class="text-white font-black text-sm">مكتب غرب القصيم للكهرباء</p>
+            <p class="text-xs text-white/80 font-bold mt-0.5">© 2026 جميع الحقوق محفوظة للمهندس <span class="text-white bg-white/15 px-2 py-0.5 rounded-full border border-white/15">Mahmoud Elzagh</span></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <a href="tel:0548699447" class="bg-white text-primary px-3 py-1.5 rounded-full font-black hover:bg-zinc-100 transition"><i class="fa-solid fa-phone ml-1"></i> 0548699447</a>
+          <a href="https://wa.me/966548699447?text=السلام%20عليكم%20-%20استفسار%20عن%20موقع%20مشترك" target="_blank" class="bg-[#25D366] text-white px-3 py-1.5 rounded-full font-black hover:bg-[#20BA5A] transition"><i class="fa-brands fa-whatsapp ml-1"></i> واتساب</a>
+        </div>
+      </div>
+      <div class="mt-6 pt-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/60">
+        <p class="font-bold">تصميم وتطوير: المهندس Mahmoud Elzagh — West Al-Qassim Electricity Office</p>
+        <p class="flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> نظام آمن ومعتمد - الإصدار 2.0</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Admin Login Modal -->
+  <div id="loginModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" id="loginBackdrop"></div>
+    <div class="relative min-h-screen flex items-center justify-center p-4">
+      <div class="bg-white rounded-[24px] w-full max-w-[420px] shadow-2xl overflow-hidden animate-in">
+        <div class="bg-gradient-to-br from-primary to-primaryDark p-6 text-white relative overflow-hidden">
+          <div class="absolute -left-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+          <div class="relative">
+            <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary text-xl shadow-lg mb-3"><i class="fa-solid fa-user-shield"></i></div>
+            <h3 class="text-lg font-black">دخول المالك / الإدارة</h3>
+            <p class="text-white/80 text-xs mt-1">لوحة التحكم لتحديث ورفع المواقع الجديدة</p>
+          </div>
+        </div>
+        <div class="p-6">
+          <div class="space-y-4">
+            <div>
+              <label class="text-xs font-bold text-zinc-700">اسم المستخدم</label>
+              <input id="loginUser" type="text" placeholder="admin" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-primary focus:bg-white font-bold text-sm" value="admin">
+            </div>
+            <div>
+              <label class="text-xs font-bold text-zinc-700">كلمة المرور</label>
+              <input id="loginPass" type="password" placeholder="••••••••" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:border-primary focus:bg-white font-bold text-sm" value="admin123">
+              <p class="text-[11px] text-zinc-500 mt-2">افتراضي: <b>admin</b> / <b>admin123</b> - يمكنك تغييرها من الإعدادات</p>
+            </div>
+            <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-xl text-xs font-bold"></div>
+            <button id="loginBtn" class="w-full bg-primary hover:bg-primaryDark text-white py-3.5 rounded-xl font-black transition flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+              <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+            </button>
+            <button id="loginCancel" class="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 py-3 rounded-xl font-bold text-sm transition">إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard Drawer -->
+  <div id="adminDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-zinc-900/50 backdrop-blur-sm" id="adminBackdrop"></div>
+    <div class="absolute inset-0 flex">
+      <div class="bg-[#FCFCFC] w-full max-w-[1120px] mr-auto h-screen overflow-hidden flex flex-col shadow-2xl animate-in">
+        <!-- Drawer Header -->
+        <div class="bg-white border-b border-zinc-200 px-5 md:px-7 py-4 flex items-center justify-between sticky top-0 z-10">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+            <div>
+              <h3 class="font-black text-[15px]">لوحة تحكم المالك</h3>
+              <p class="text-[11px] text-zinc-500 font-bold">إدارة مواقع المشتركين - تحديث فوري للفنيين</p>
+            </div>
+            <span class="hidden sm:inline-flex bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full text-xs font-black"><span class="w-2 h-2 bg-blue-500 rounded-full inline-block ml-1 animate-pulse"></span> Online</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btnExport" class="hidden sm:flex items-center gap-2 bg-white border border-zinc-200 px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-zinc-50"><i class="fa-solid fa-file-excel text-blue-600"></i> تصدير Excel</button>
+            <button id="adminClose" class="w-10 h-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center hover:bg-black"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+
+        <!-- Drawer Content -->
+        <div class="flex-1 overflow-auto p-5 md:p-7 space-y-5">
+          <!-- Stats -->
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-white rounded-2xl p-4 border border-zinc-200">
+              <p class="text-[11px] font-bold text-zinc-500">إجمالي المواقع</p><p id="adminTotal" class="text-2xl font-black">0</p>
+            </div>
+            <div class="bg-white rounded-2xl p-4 border border-zinc-200">
+              <p class="text-[11px] font-bold text-zinc-500">آخر إضافة</p><p id="adminLastAdd" class="text-xs font-bold mt-1">-</p>
+            </div>
+            <div class="bg-primary rounded-2xl p-4 text-white">
+              <p class="text-[11px] font-bold text-white/80">حالة المزامنة</p><p class="text-sm font-black">مزامن ✓</p>
+            </div>
+          </div>
+
+          <!-- Add Form -->
+          <div class="bg-white rounded-[20px] border border-zinc-200 overflow-hidden">
+            <div class="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+              <h4 class="font-black text-sm flex items-center gap-2"><i class="fa-solid fa-plus bg-primary text-white w-7 h-7 rounded-lg flex items-center justify-center text-xs inline-flex items-center justify-center"></i> إضافة / تحديث موقع</h4>
+              <span class="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 rounded-full font-bold">الحقول بعلامة * مطلوبة</span>
+            </div>
+            <form id="locationForm" class="p-5 grid md:grid-cols-2 gap-4">
+              <input type="hidden" id="editId">
+              <div><label class="text-xs font-bold">رقم الاشتراك *</label><input id="fSub" required placeholder="مثال: 3001234567" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary font-bold text-sm"></div>
+              <div><label class="text-xs font-bold">رقم التجهيز *</label><input id="fEquip" required placeholder="مثال: EQ-10234" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary font-bold text-sm"></div>
+              <div><label class="text-xs font-bold">اسم المشترك</label><input id="fName" placeholder="مثال: عبدالله محمد الحربي" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary text-sm font-bold"></div>
+              <div><label class="text-xs font-bold">العنوان / الوصف</label><input id="fAddress" placeholder="مثال: حي الصفراء - شارع الملك عبدالعزيز - بريدة" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary text-sm"></div>
+              <div><label class="text-xs font-bold">خط العرض Latitude *</label><input id="fLat" required type="number" step="any" placeholder="26.3260" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary font-mono text-sm"></div>
+              <div><label class="text-xs font-bold">خط الطول Longitude *</label><input id="fLng" required type="number" step="any" placeholder="43.9750" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary font-mono text-sm"></div>
+              <div class="md:col-span-2"><label class="text-xs font-bold">ملاحظات</label><input id="fNotes" placeholder="مثال: العداد داخل السور - الاتصال قبل الوصول" class="mt-1.5 w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:bg-white focus:border-primary text-sm"></div>
+              <div class="md:col-span-2 flex gap-3">
+                <button type="submit" id="formSubmitBtn" class="flex-1 bg-primary hover:bg-primaryDark text-white py-3.5 rounded-xl font-black flex items-center justify-center gap-2 transition"><i class="fa-solid fa-floppy-disk"></i> حفظ الموقع</button>
+                <button type="button" id="formResetBtn" class="bg-zinc-100 hover:bg-zinc-200 px-6 py-3.5 rounded-xl font-bold text-sm">تفريغ</button>
+                <button type="button" id="btnGetCurrentLocation" class="hidden sm:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3.5 rounded-xl font-bold text-sm"><i class="fa-solid fa-location-crosshairs"></i> موقعي الحالي</button>
+              </div>
+              <p class="md:col-span-2 text-[11px] text-zinc-500 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2"><i class="fa-solid fa-circle-info text-blue-600 ml-1"></i> للحصول على الإحداثيات: افتح Google Maps وانسخ الرابط أو اضغط مطولاً على الموقع وانسخ الإحداثيات.</p>
+            </form>
+          </div>
+
+          <!-- Bulk Upload -->
+          <div class="bg-white rounded-[20px] border border-zinc-200 p-5">
+            <h4 class="font-black text-sm flex items-center gap-2"><i class="fa-solid fa-file-csv text-blue-600"></i> رفع جماعي (Excel / CSV)</h4>
+            <p class="text-xs text-zinc-500 mt-1">ذكي: يتعرف تلقائياً على <b class="text-primary">30 / 300 → رقم حساب</b> و <b class="text-primary">50 / 500 → رقم تجهيز</b> مهما كان ترتيب الأعمدة • يدعم CSV و Excel • الفاصل `,` أو `;` أو Tab</p>
+            <div class="flex flex-col sm:flex-row gap-3 mt-4">
+              <label class="flex-1 bg-zinc-900 hover:bg-black text-white px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition">
+                <i class="fa-solid fa-upload"></i> اختر ملف CSV / Excel
+                <input id="csvInput" type="file" accept=".csv,.xlsx,.xls,.txt" class="hidden">
+              </label>
+              <button id="btnDownloadTemplate" class="flex-1 bg-white border border-zinc-200 px-5 py-3 rounded-xl font-bold text-sm hover:bg-zinc-50 flex items-center justify-center gap-2"><i class="fa-solid fa-download"></i> تحميل قالب Excel</button>
+              <button id="btnClearAll" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2"><i class="fa-solid fa-trash"></i> حذف الكل</button>
+            </div>
+            <!-- Progress for heavy files -->
+            <div id="importProgressWrap" class="hidden mt-4 bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <div class="flex items-center justify-between text-xs font-bold text-blue-900 mb-2">
+                <span id="importProgressText">جاري الحفظ...</span>
+                <span id="importProgressPct" class="bg-blue-600 text-white px-2 py-0.5 rounded-full">0%</span>
+              </div>
+              <div class="w-full bg-blue-100 rounded-full h-2.5 overflow-hidden">
+                <div id="importProgressBar" class="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300" style="width:0%"></div>
+              </div>
+              <p id="importProgressDetail" class="text-[11px] text-zinc-500 mt-2">الرجاء عدم إغلاق الصفحة حتى يكتمل الرفع</p>
+            </div>
+            <div id="importLog" class="hidden mt-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs font-mono max-h-40 overflow-auto"></div>
+          </div>
+
+          <!-- Filter -->
+          <div class="flex flex-col sm:flex-row gap-3 items-stretch">
+            <div class="flex-1 relative">
+              <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm"></i>
+              <input id="adminSearch" placeholder="فلتر داخل لوحة التحكم: ابحث برقم الاشتراك أو التجهيز أو الاسم..." class="w-full pr-10 pl-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary text-sm font-bold">
+            </div>
+            <div class="text-xs bg-white border border-zinc-200 rounded-xl px-4 py-3 font-bold text-zinc-600 flex items-center gap-2"><span>المعروض:</span><span id="adminFilteredCount" class="bg-zinc-900 text-white px-2 py-0.5 rounded-full">0</span></div>
+          </div>
+
+          <!-- Table -->
+          <div class="bg-white rounded-[20px] border border-zinc-200 overflow-hidden">
+            <div class="overflow-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-zinc-50 border-b border-zinc-200">
+                  <tr class="text-[11px] font-black text-zinc-600">
+                    <th class="px-4 py-3 text-right whitespace-nowrap">رقم الاشتراك</th>
+                    <th class="px-4 py-3 text-right whitespace-nowrap">رقم التجهيز</th>
+                    <th class="px-4 py-3 text-right">المشترك / العنوان</th>
+                    <th class="px-4 py-3 text-right">الإحداثيات</th>
+                    <th class="px-4 py-3 text-center">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="adminTableBody" class="divide-y divide-zinc-100"></tbody>
+              </table>
+            </div>
+            <div id="adminEmpty" class="hidden p-8 text-center text-sm text-zinc-500">لا توجد بيانات مطابقة</div>
+          </div>
+
+          <!-- Security Note -->
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+            <div class="w-9 h-9 bg-amber-500 text-white rounded-xl flex items-center justify-center shrink-0"><i class="fa-solid fa-lock"></i></div>
+            <div>
+              <p class="text-xs font-black text-amber-900">تنبيه أمان</p>
+              <p class="text-xs text-amber-800 mt-1 leading-relaxed">هذه اللوحة للمالك فقط. لا تشارك كلمة المرور مع الفنيين. الفنيون يستخدمون صفحة البحث فقط بدون تسجيل دخول لتسهيل العمل الميداني.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+    <div id="toastInner" class="bg-zinc-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 min-w-[280px] justify-center"></div>
+  </div>
+
+  <!-- Excel Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <script>
+    window.SUPABASE_URL = "https://fvgweyyqoyoehrrhyhrx.supabase.co";
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2Z3dleXlxb3lvZWhycmh5aHJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MzUzODEsImV4cCI6MjEwODAxMTM4MX0.pH7VyKi1qEsxyG75-7DvUPj8h5Q5TkLhLbVD2KPJwF8";
+  </script>
+</body>
+</html>
