@@ -34,7 +34,7 @@
     .animate-in{animation:slideIn .4s ease}
     .map-iframe{border:0;width:100%;height:100%;border-radius:16px}
   </style>
-  <script type="module" crossorigin src="/RABBIT28/assets/index-BJIWHzw_.js"></script>
+  <script type="module" crossorigin src="/RABBIT28/assets/index-2FyiTIHi.js"></script>
 </head>
 <body class="bg-[#F6F9FF] text-zinc-800 pattern-bg min-h-screen">
 
@@ -383,11 +383,31 @@
             <div id="importLog" class="hidden mt-3 bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-xs font-mono max-h-40 overflow-auto"></div>
           </div>
 
+          <!-- Pagination Controls (for 70k) -->
+          <div id="paginationBar" class="hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2 text-xs font-bold">
+              <button id="prevPage" class="bg-white border border-zinc-200 px-4 py-2 rounded-xl hover:bg-zinc-50 disabled:opacity-40">السابق</button>
+              <span id="pageInfo" class="bg-white border border-zinc-200 px-3 py-2 rounded-xl">صفحة 1 / 1</span>
+              <button id="nextPage" class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-primaryDark disabled:opacity-40">التالي</button>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-zinc-600 font-bold">حجم الصفحة:</span>
+              <select id="pageSize" class="bg-white border border-zinc-200 rounded-xl px-3 py-2 font-bold">
+                <option value="200">200</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="5000">5000</option>
+              </select>
+              <button id="loadAllBtn" class="bg-amber-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-600">عرض الكل (قد يهنج)</button>
+            </div>
+            <div class="text-xs text-zinc-600 font-bold">الإجمالي: <span id="totalCountDisplay" class="bg-white px-2 py-1 rounded-full border">0</span></div>
+          </div>
+
           <!-- Filter -->
           <div class="flex flex-col sm:flex-row gap-3 items-stretch">
             <div class="flex-1 relative">
               <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm"></i>
-              <input id="adminSearch" placeholder="فلتر داخل لوحة التحكم: ابحث برقم الاشتراك أو التجهيز أو الاسم..." class="w-full pr-10 pl-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary text-sm font-bold">
+              <input id="adminSearch" placeholder="فلتر داخل لوحة التحكم: ابحث برقم الاشتراك أو التجهيز أو الاسم...  (في الوضع السحابي البحث يطلب السيرفر مباشرة)" class="w-full pr-10 pl-4 py-3 bg-white border border-zinc-200 rounded-xl outline-none focus:border-primary text-sm font-bold">
             </div>
             <div class="text-xs bg-white border border-zinc-200 rounded-xl px-4 py-3 font-bold text-zinc-600 flex items-center gap-2"><span>المعروض:</span><span id="adminFilteredCount" class="bg-zinc-900 text-white px-2 py-0.5 rounded-full">0</span></div>
           </div>
