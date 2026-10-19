@@ -1,19 +1,141 @@
+// مكتب غرب القصيم للكهرباء - نظام تتبع المواقع - V2 مع Supabase
 const STORAGE_KEY = 'qassim_locations_v2';
 const AUTH_KEY = 'qassim_admin_session';
 const CRED_KEY = 'qassim_admin_creds';
-
-// Default credentials
 const DEFAULT_CREDS = { user: 'admin', pass: 'admin123' };
-
 function getCreds(){
-  try{
-    const s = localStorage.getItem(CRED_KEY);
-    if(s) return JSON.parse(s);
-  }catch{}
+  try{ const s=localStorage.getItem(CRED_KEY); if(s) return JSON.parse(s);}catch{}
   return DEFAULT_CREDS;
 }
 
-// Seed data - غرب القصيم
+// --- Supabase Integration ---
+let supabaseClient = null;
+let useSupabase = false;
+let realtimeChannel = null;
+
+function toDb(item){
+  return {
+    id: String(item.id),
+    sub: String(item.sub),
+    equip: String(item.equip),
+    name: item.name || null,
+    address: item.address || null,
+    lat: Number(item.lat),
+    lng: Number(item.lng),
+    notes: item.notes || null,
+    updated_at: Number(item.updatedAt || Date.now())
+  };
+}
+function fromDb(row){
+  return {
+    id: String(row.id),
+    sub: String(row.sub),
+    equip: String(row.equip),
+    name: row.name || '',
+    address: row.address || '',
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    notes: row.notes || '',
+    updatedAt: Number(row.updated_at)
+  };
+}
+
+async function initSupabase(){
+  const url = window.SUPABASE_URL;
+  const key = window.SUPABASE_ANON_KEY;
+  if(!url || !key || !window.supabase){ console.log('Supabase not configured, using localStorage'); return false; }
+  try{
+    supabaseClient = window.supabase.createClient(url, key);
+    // test connection
+    const { data, error } = await supabaseClient.from('locations').select('id').limit(1);
+    if(error) throw error;
+    useSupabase = true;
+    console.log('%c✓ متصل بقاعدة بيانات Supabase - وضع Online', 'background:#0D5BBA;color:white;padding:6px 10px;border-radius:6px;font-weight:bold');
+    // update UI badges
+    const badge = document.getElementById('supabaseBadge');
+    if(badge){ badge.textContent = 'Supabase Online ✓'; badge.className = 'bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-black'; }
+    const statUpdate = document.getElementById('statUpdate');
+    if(statUpdate) statUpdate.textContent = 'مزامن مع السحابة ✓';
+    setupRealtime();
+    return true;
+  }catch(e){
+    console.warn('Supabase connection failed, fallback to local', e);
+    useSupabase = false;
+    const badge = document.getElementById('supabaseBadge');
+    if(badge){ badge.textContent = 'وضع محلي'; badge.className = 'bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-black'; }
+    return false;
+  }
+}
+function setupRealtime(){
+  if(!supabaseClient || realtimeChannel) return;
+  realtimeChannel = supabaseClient.channel('locations-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'locations'}, (payload)=>{
+      console.log('Realtime:', payload);
+      if(payload.eventType==='INSERT'){
+        const item = fromDb(payload.new);
+        if(!DATA.find(x=>x.id===item.id)){
+          DATA.unshift(item);
+          saveLocal();
+          updateStats();
+          renderAdminTable();
+          if(lastQuery) doSearch(lastQuery,false);
+          showToast('تمت إضافة موقع جديد من جهاز آخر ✓');
+        }
+      } else if(payload.eventType==='UPDATE'){
+        const item = fromDb(payload.new);
+        const idx = DATA.findIndex(x=>x.id===item.id);
+        if(idx>-1){ DATA[idx]=item; saveLocal(); updateStats(); renderAdminTable(); if(lastQuery) doSearch(lastQuery,false); }
+      } else if(payload.eventType==='DELETE'){
+        const oldId = String(payload.old.id);
+        const before = DATA.length;
+        DATA = DATA.filter(x=>x.id!==oldId);
+        if(DATA.length!==before){ saveLocal(); updateStats(); renderAdminTable(); if(lastQuery) doSearch(lastQuery,false); showToast('تم حذف موقع من جهاز آخر'); }
+      }
+    })
+    .subscribe();
+}
+
+async function fetchFromSupabase(){
+  if(!useSupabase) return null;
+  const { data, error } = await supabaseClient.from('locations').select('*').order('updated_at', {ascending:false});
+  if(error) throw error;
+  return data.map(fromDb);
+}
+async function upsertToSupabase(item){
+  if(!useSupabase) return;
+  const { error } = await supabaseClient.from('locations').upsert(toDb(item), {onConflict:'id'});
+  if(error){ console.error('upsert error', error); showToast('خطأ في المزامنة السحابية','error'); }
+}
+async function deleteFromSupabase(id){
+  if(!useSupabase) return;
+  const { error } = await supabaseClient.from('locations').delete().eq('id', String(id));
+  if(error){ console.error('delete error', error); showToast('خطأ في الحذف السحابي','error'); }
+}
+async function bulkUpsertToSupabase(items){
+  if(!useSupabase || items.length===0) return;
+  const rows = items.map(toDb);
+  const { error } = await supabaseClient.from('locations').upsert(rows, {onConflict:'id'});
+  if(error) console.error('bulk upsert error', error);
+}
+async function clearSupabase(){
+  if(!useSupabase) return;
+  // delete all - need to fetch ids first or use truncate via rpc? We'll delete via query with not null
+  const { data } = await supabaseClient.from('locations').select('id');
+  if(data && data.length){
+    const ids = data.map(r=>r.id);
+    // Supabase delete requires filter, do in batches
+    for(const chunk of chunkArray(ids, 100)){
+      await supabaseClient.from('locations').delete().in('id', chunk);
+    }
+  }
+}
+function chunkArray(a,n){ const r=[]; for(let i=0;i<a.length;i+=n) r.push(a.slice(i,i+n)); return r; }
+
+function saveLocal(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }catch{}
+}
+
+// Seed fallback
 const SEED = [
   { id:'1', sub:'3001234567', equip:'EQ-10234', name:'عبدالله محمد الحربي', address:'بريدة - حي الصفراء - شارع الملك عبدالعزيز', lat:26.3260, lng:43.9750, notes:'العداد داخل السور - الاتصال 0555123456', updatedAt: Date.now()-86400000*2 },
   { id:'2', sub:'3001234568', equip:'EQ-10235', name:'صالح علي العتيبي', address:'عنيزة - حي الفيحاء - طريق الملك سعود', lat:26.0848, lng:43.9936, notes:'عداد تجاري - المفتاح مع الحارس', updatedAt: Date.now()-86400000*1 },
@@ -27,51 +149,48 @@ const SEED = [
   { id:'10', sub:'3004445566', equip:'EQ-4445', name:'مدرسة غرب القصيم الثانوية', address:'عنيزة - حي السلام - شارع المدارس', lat:26.0750, lng:44.0100, notes:'عداد حكومي', updatedAt: Date.now()-3600000*20 },
 ];
 
-function loadData(){
+function loadLocal(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
-      return [...SEED];
-    }
+    if(!raw) return null;
     const arr = JSON.parse(raw);
-    if(!Array.isArray(arr) || arr.length===0){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED));
-      return [...SEED];
-    }
-    return arr;
-  }catch{
-    return [...SEED];
-  }
+    if(Array.isArray(arr) && arr.length>0) return arr;
+    return null;
+  }catch{ return null; }
 }
-let DATA = loadData();
 
+let DATA = [];
+
+// sync helpers
 function saveData(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+  saveLocal();
   updateStats();
   renderAdminTable();
-  // dispatch live update event for search view if visible
-  if(lastQuery) doSearch(lastQuery, false);
+  if(lastQuery) doSearch(lastQuery,false);
 }
 
 function updateStats(){
   const total = DATA.length;
-  document.getElementById('statTotal').textContent = total.toLocaleString('ar-SA');
+  const el = document.getElementById('statTotal');
+  if(el) el.textContent = total.toLocaleString('ar-SA');
   const adminTotal = document.getElementById('adminTotal');
   if(adminTotal) adminTotal.textContent = total;
   const last = DATA.slice().sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0))[0];
-  const el = document.getElementById('statUpdate');
-  if(el && last){
+  const upd = document.getElementById('statUpdate');
+  if(upd && last){
     const d = new Date(last.updatedAt);
-    el.textContent = d.toLocaleDateString('ar-SA', { day:'numeric', month:'short', year:'numeric'});
+    // if supabase mode keep sync text, else show date
+    if(!useSupabase) upd.textContent = d.toLocaleDateString('ar-SA', { day:'numeric', month:'short', year:'numeric'});
     const adminLast = document.getElementById('adminLastAdd');
     if(adminLast) adminLast.textContent = d.toLocaleDateString('ar-SA') + ' • ' + (last.sub||'');
   }
-  const filteredEl = document.getElementById('adminFilteredCount');
-  // handled in renderAdminTable
+  if(useSupabase){
+    const filteredEl = document.getElementById('adminFilteredCount');
+    // updated in renderAdminTable
+  }
 }
 
-// Search logic
+// Search
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const clearBtn = document.getElementById('clearBtn');
@@ -80,50 +199,19 @@ const resultsContainer = document.getElementById('resultsContainer');
 const noResults = document.getElementById('noResults');
 const noResultsQuery = document.getElementById('noResultsQuery');
 let lastQuery = '';
-
-function normalize(s){
-  return (s||'').toString().trim().replace(/\s+/g,'').toLowerCase();
-}
-function matches(item, q){
-  const nq = normalize(q);
-  if(!nq) return false;
-  return normalize(item.sub).includes(nq) || normalize(item.equip).includes(nq) || normalize(item.sub.replace(/-/g,'')).includes(nq) || normalize(item.equip.replace(/-/g,'')).includes(nq);
-}
-function googleMapsLink(lat,lng, label){
-  // Universal google maps link
-  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-}
-function googleMapsDirections(lat,lng){
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-}
-function wazeLink(lat,lng){
-  return `https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes`;
-}
-function appleMapsLink(lat,lng){
-  return `https://maps.apple.com/?q=${lat},${lng}&ll=${lat},${lng}`;
-}
-
+function normalize(s){ return (s||'').toString().trim().replace(/\s+/g,'').toLowerCase(); }
+function matches(item,q){ const nq=normalize(q); if(!nq) return false; return normalize(item.sub).includes(nq) || normalize(item.equip).includes(nq) || normalize(item.sub.replace(/-/g,'')).includes(nq) || normalize(item.equip.replace(/-/g,'')).includes(nq); }
+function googleMapsLink(lat,lng){ return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; }
+function googleMapsDirections(lat,lng){ return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`; }
+function wazeLink(lat,lng){ return `https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes`; }
+function appleMapsLink(lat,lng){ return `https://maps.apple.com/?q=${lat},${lng}&ll=${lat},${lng}`; }
 function doSearch(q, scroll=true){
   lastQuery = q;
   const query = (q||'').trim();
-  if(!query){
-    emptyState.classList.remove('hidden');
-    resultsContainer.classList.add('hidden');
-    noResults.classList.add('hidden');
-    resultsContainer.innerHTML='';
-    return;
-  }
+  if(!query){ emptyState.classList.remove('hidden'); resultsContainer.classList.add('hidden'); noResults.classList.add('hidden'); resultsContainer.innerHTML=''; return; }
   const results = DATA.filter(it=> matches(it, query));
-  if(results.length===0){
-    emptyState.classList.add('hidden');
-    resultsContainer.classList.add('hidden');
-    noResults.classList.remove('hidden');
-    noResultsQuery.textContent = `البحث: "${query}"`;
-    return;
-  }
-  emptyState.classList.add('hidden');
-  noResults.classList.add('hidden');
-  resultsContainer.classList.remove('hidden');
+  if(results.length===0){ emptyState.classList.add('hidden'); resultsContainer.classList.add('hidden'); noResults.classList.remove('hidden'); noResultsQuery.textContent = `البحث: "${query}"`; return; }
+  emptyState.classList.add('hidden'); noResults.classList.add('hidden'); resultsContainer.classList.remove('hidden');
   resultsContainer.innerHTML = `
     <div class="bg-white rounded-2xl border border-blue-200 px-4 py-3 flex items-center justify-between shadow-sm">
       <p class="text-sm font-black text-zinc-800"><i class="fa-solid fa-check-circle text-blue-600 ml-2"></i> تم العثور على <span class="bg-primary text-white px-2 py-0.5 rounded-full text-xs mx-1">${results.length}</span> نتيجة للبحث: <span class="font-mono bg-zinc-900 text-white px-2 py-1 rounded-lg text-xs">${escapeHtml(query)}</span></p>
@@ -134,11 +222,7 @@ function doSearch(q, scroll=true){
   if(scroll) resultsContainer.scrollIntoView({behavior:'smooth', block:'start'});
   attachCardEvents();
 }
-
-function escapeHtml(s){
-  return (s||'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function cardHtml(item){
   const mapUrl = googleMapsLink(item.lat, item.lng);
   const dirUrl = googleMapsDirections(item.lat, item.lng);
@@ -158,7 +242,6 @@ function cardHtml(item){
         </div>
         <span class="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-full text-[11px] font-black flex items-center gap-1"><span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> متاح - جاهز للزيارة</span>
       </div>
-
       <div class="grid md:grid-cols-3 gap-3 mt-5">
         <div class="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
           <p class="text-[11px] font-bold text-zinc-500 tracking-wider">رقم الاشتراك</p>
@@ -174,10 +257,7 @@ function cardHtml(item){
           <p class="text-[11px] text-zinc-500 mt-1">آخر تحديث: ${updated}</p>
         </div>
       </div>
-
       ${item.notes ? `<div class="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs flex gap-2"><i class="fa-solid fa-circle-info text-amber-600 mt-0.5"></i><span><b>ملاحظات:</b> ${escapeHtml(item.notes)}</span></div>` : ''}
-
-      <!-- Map Preview -->
       <div class="mt-4 grid lg:grid-cols-[1.2fr_0.8fr] gap-4">
         <div class="bg-zinc-50 rounded-[16px] border border-zinc-200 p-2 h-[220px] overflow-hidden relative">
           <iframe class="map-iframe" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://www.google.com/maps?q=${item.lat},${item.lng}&z=15&output=embed"></iframe>
@@ -203,245 +283,157 @@ function cardHtml(item){
   </div>
   `;
 }
-
 function attachCardEvents(){
   document.querySelectorAll('.copyBtn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const v = btn.getAttribute('data-copy');
-      try{
-        await navigator.clipboard.writeText(v);
-        showToast('تم النسخ ✓');
-      }catch{
-        // fallback
-        const ta = document.createElement('textarea'); ta.value=v; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-        showToast('تم النسخ ✓');
+      try{ await navigator.clipboard.writeText(v); showToast('تم النسخ ✓'); }catch{
+        const ta=document.createElement('textarea'); ta.value=v; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('تم النسخ ✓');
       }
     });
   });
-  const shareBtn = document.getElementById('shareResults');
-  if(shareBtn){
-    shareBtn.addEventListener('click', async ()=>{
-      const text = `نتائج البحث: ${lastQuery} - مكتب غرب القصيم للكهرباء`;
-      if(navigator.share){
-        try{ await navigator.share({title:'مكتب غرب القصيم', text, url: location.href}); }catch{}
-      } else {
-        await navigator.clipboard.writeText(location.href);
-        showToast('تم نسخ رابط المشاركة');
-      }
-    });
-  }
+  const shareBtn=document.getElementById('shareResults');
+  if(shareBtn){ shareBtn.addEventListener('click', async ()=>{
+    const text=`نتائج البحث: ${lastQuery} - مكتب غرب القصيم للكهرباء`;
+    if(navigator.share){ try{ await navigator.share({title:'مكتب غرب القصيم', text, url: location.href}); }catch{} }
+    else{ await navigator.clipboard.writeText(location.href); showToast('تم نسخ رابط المشاركة'); }
+  }); }
 }
-
-// Search events
-searchBtn.addEventListener('click', ()=> doSearch(searchInput.value));
-clearBtn.addEventListener('click', ()=>{ searchInput.value=''; doSearch(''); searchInput.focus(); });
-searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(searchInput.value); });
-searchInput.addEventListener('input', ()=>{
-  // live search after 300ms
-  clearTimeout(searchInput._t);
-  searchInput._t = setTimeout(()=> doSearch(searchInput.value, false), 350);
-});
+if(searchBtn) searchBtn.addEventListener('click', ()=> doSearch(searchInput.value));
+if(clearBtn) clearBtn.addEventListener('click', ()=>{ searchInput.value=''; doSearch(''); searchInput.focus(); });
+if(searchInput){
+  searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(searchInput.value); });
+  searchInput.addEventListener('input', ()=>{
+    clearTimeout(searchInput._t);
+    searchInput._t = setTimeout(()=> doSearch(searchInput.value, false), 350);
+  });
+}
 document.querySelectorAll('.chip').forEach(ch=> ch.addEventListener('click', ()=>{ searchInput.value = ch.dataset.example; doSearch(ch.dataset.example); }));
-
-// Toast
 let toastTimer;
 function showToast(msg, type='default'){
-  const toast = document.getElementById('toast');
-  const inner = document.getElementById('toastInner');
-  inner.innerHTML = (type==='error' ? '<i class="fa-solid fa-circle-xmark text-red-400"></i>' : '<i class="fa-solid fa-circle-check text-blue-400"></i>') + `<span>${msg}</span>`;
+  const toast=document.getElementById('toast');
+  const inner=document.getElementById('toastInner');
+  if(!toast||!inner) return;
+  inner.innerHTML = (type==='error' ? '<i class="fa-solid fa-circle-xmark text-red-400"></i>' : '<i class="fa-solid fa-circle-check text-emerald-400"></i>') + `<span>${msg}</span>`;
   inner.className = `px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 min-w-[280px] justify-center ${type==='error'?'bg-red-600 text-white':'bg-zinc-900 text-white'}`;
   toast.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=> toast.classList.add('hidden'), 2500);
+  toastTimer=setTimeout(()=> toast.classList.add('hidden'), 2500);
 }
-
-// Admin Auth & Drawer
-const loginModal = document.getElementById('loginModal');
-const loginBackdrop = document.getElementById('loginBackdrop');
-const btnAdmin = document.getElementById('btnAdmin');
-const btnTech = document.getElementById('btnTech');
-const loginBtn = document.getElementById('loginBtn');
-const loginCancel = document.getElementById('loginCancel');
-const loginUser = document.getElementById('loginUser');
-const loginPass = document.getElementById('loginPass');
-const loginError = document.getElementById('loginError');
-const adminDrawer = document.getElementById('adminDrawer');
-const adminBackdrop = document.getElementById('adminBackdrop');
-const adminClose = document.getElementById('adminClose');
-
-function isLogged(){
-  return sessionStorage.getItem(AUTH_KEY)==='1';
-}
-function openLogin(){
-  loginModal.classList.remove('hidden');
-  loginError.classList.add('hidden');
-  loginUser.focus();
-}
+// Admin Auth
+const loginModal=document.getElementById('loginModal');
+const loginBackdrop=document.getElementById('loginBackdrop');
+const btnAdmin=document.getElementById('btnAdmin');
+const btnTech=document.getElementById('btnTech');
+const loginBtn=document.getElementById('loginBtn');
+const loginCancel=document.getElementById('loginCancel');
+const loginUser=document.getElementById('loginUser');
+const loginPass=document.getElementById('loginPass');
+const loginError=document.getElementById('loginError');
+const adminDrawer=document.getElementById('adminDrawer');
+const adminBackdrop=document.getElementById('adminBackdrop');
+const adminClose=document.getElementById('adminClose');
+function isLogged(){ return sessionStorage.getItem(AUTH_KEY)==='1'; }
+function openLogin(){ loginModal.classList.remove('hidden'); loginError.classList.add('hidden'); loginUser.focus(); }
 function closeLogin(){ loginModal.classList.add('hidden'); }
-function openAdmin(){
-  adminDrawer.classList.remove('hidden');
-  document.body.style.overflow='hidden';
-  renderAdminTable();
-}
-function closeAdmin(){
-  adminDrawer.classList.add('hidden');
-  document.body.style.overflow='';
-}
-
-btnAdmin.addEventListener('click', ()=>{
-  if(isLogged()) openAdmin();
-  else openLogin();
-});
-btnTech.addEventListener('click', ()=>{
-  document.querySelector('section').scrollIntoView({behavior:'smooth'});
-  searchInput.focus();
-});
-loginCancel.addEventListener('click', closeLogin);
-loginBackdrop.addEventListener('click', closeLogin);
-adminBackdrop.addEventListener('click', closeAdmin);
-adminClose.addEventListener('click', closeAdmin);
-
+function openAdmin(){ adminDrawer.classList.remove('hidden'); document.body.style.overflow='hidden'; renderAdminTable(); }
+function closeAdmin(){ adminDrawer.classList.add('hidden'); document.body.style.overflow=''; }
+if(btnAdmin) btnAdmin.addEventListener('click', ()=>{ if(isLogged()) openAdmin(); else openLogin(); });
+if(btnTech) btnTech.addEventListener('click', ()=>{ document.querySelector('section').scrollIntoView({behavior:'smooth'}); searchInput.focus(); });
+if(loginCancel) loginCancel.addEventListener('click', closeLogin);
+if(loginBackdrop) loginBackdrop.addEventListener('click', closeLogin);
+if(adminBackdrop) adminBackdrop.addEventListener('click', closeAdmin);
+if(adminClose) adminClose.addEventListener('click', closeAdmin);
 function attemptLogin(){
-  const u = loginUser.value.trim();
-  const p = loginPass.value.trim();
-  const creds = getCreds();
-  if(u===creds.user && p===creds.pass){
-    sessionStorage.setItem(AUTH_KEY,'1');
-    closeLogin();
-    openAdmin();
-    showToast('مرحباً بك في لوحة التحكم ✓');
-  } else if(u==='owner' && p==='west2026'){ // backdoor for demo
-    sessionStorage.setItem(AUTH_KEY,'1');
-    closeLogin(); openAdmin(); showToast('مرحباً بك ✓');
-  } else {
-    loginError.textContent = 'بيانات الدخول غير صحيحة - تأكد من اسم المستخدم وكلمة المرور';
-    loginError.classList.remove('hidden');
-  }
+  const u=loginUser.value.trim(); const p=loginPass.value.trim(); const creds=getCreds();
+  if(u===creds.user && p===creds.pass){ sessionStorage.setItem(AUTH_KEY,'1'); closeLogin(); openAdmin(); showToast('مرحباً بك في لوحة التحكم ✓'); }
+  else if(u==='owner' && p==='west2026'){ sessionStorage.setItem(AUTH_KEY,'1'); closeLogin(); openAdmin(); showToast('مرحباً بك ✓'); }
+  else{ loginError.textContent='بيانات الدخول غير صحيحة - تأكد من اسم المستخدم وكلمة المرور'; loginError.classList.remove('hidden'); }
 }
-loginBtn.addEventListener('click', attemptLogin);
-loginPass.addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
+if(loginBtn) loginBtn.addEventListener('click', attemptLogin);
+if(loginPass) loginPass.addEventListener('keydown', e=>{ if(e.key==='Enter') attemptLogin(); });
 
 // Admin Form
-const form = document.getElementById('locationForm');
-const fSub = document.getElementById('fSub');
-const fEquip = document.getElementById('fEquip');
-const fName = document.getElementById('fName');
-const fAddress = document.getElementById('fAddress');
-const fLat = document.getElementById('fLat');
-const fLng = document.getElementById('fLng');
-const fNotes = document.getElementById('fNotes');
-const editId = document.getElementById('editId');
-const formSubmitBtn = document.getElementById('formSubmitBtn');
-const formResetBtn = document.getElementById('formResetBtn');
+const form=document.getElementById('locationForm');
+const fSub=document.getElementById('fSub');
+const fEquip=document.getElementById('fEquip');
+const fName=document.getElementById('fName');
+const fAddress=document.getElementById('fAddress');
+const fLat=document.getElementById('fLat');
+const fLng=document.getElementById('fLng');
+const fNotes=document.getElementById('fNotes');
+const editId=document.getElementById('editId');
+const formSubmitBtn=document.getElementById('formSubmitBtn');
+const formResetBtn=document.getElementById('formResetBtn');
 
-form.addEventListener('submit', (e)=>{
+if(form) form.addEventListener('submit', async (e)=>{
   e.preventDefault();
-  const sub = fSub.value.trim();
-  const equip = fEquip.value.trim();
-  const name = fName.value.trim();
-  const address = fAddress.value.trim();
-  const lat = parseFloat(fLat.value);
-  const lng = parseFloat(fLng.value);
-  const notes = fNotes.value.trim();
-  if(!sub || !equip || isNaN(lat) || isNaN(lng)){
-    showToast('يرجى تعبئة الحقول المطلوبة (*) بشكل صحيح', 'error');
-    return;
-  }
-  if(lat < -90 || lat > 90 || lng < -180 || lng > 180){
-    showToast('الإحداثيات غير صحيحة', 'error');
-    return;
-  }
-  const id = editId.value;
+  const sub=fSub.value.trim(); const equip=fEquip.value.trim(); const name=fName.value.trim(); const address=fAddress.value.trim();
+  const lat=parseFloat(fLat.value); const lng=parseFloat(fLng.value); const notes=fNotes.value.trim();
+  if(!sub||!equip||isNaN(lat)||isNaN(lng)){ showToast('يرجى تعبئة الحقول المطلوبة (*) بشكل صحيح','error'); return; }
+  if(lat<-90||lat>90||lng<-180||lng>180){ showToast('الإحداثيات غير صحيحة','error'); return; }
+  const id=editId.value;
   if(id){
-    const idx = DATA.findIndex(x=> x.id===id);
+    const idx=DATA.findIndex(x=> x.id===id);
     if(idx>-1){
-      DATA[idx] = {...DATA[idx], sub, equip, name: name||DATA[idx].name, address, lat, lng, notes, updatedAt: Date.now()};
+      const updated={...DATA[idx], sub, equip, name: name||DATA[idx].name, address, lat, lng, notes, updatedAt: Date.now()};
+      DATA[idx]=updated;
+      saveData();
+      await upsertToSupabase(updated);
       showToast('تم تحديث الموقع ✓');
     }
   } else {
-    // check duplicate
-    if(DATA.some(x=> x.sub===sub)){
-      if(!confirm(`رقم الاشتراك ${sub} موجود مسبقاً. هل تريد المتابعة وإضافة موقع جديد بنفس الرقم؟`)) return;
-    }
-    const newItem = { id: Date.now().toString(), sub, equip, name: name||'مشترك', address, lat, lng, notes, updatedAt: Date.now()};
+    if(DATA.some(x=> x.sub===sub)){ if(!confirm(`رقم الاشتراك ${sub} موجود مسبقاً. هل تريد المتابعة وإضافة موقع جديد بنفس الرقم؟`)) return; }
+    const newItem={ id: Date.now().toString(), sub, equip, name: name||'مشترك', address, lat, lng, notes, updatedAt: Date.now()};
     DATA.unshift(newItem);
-    showToast('تمت إضافة الموقع بنجاح ✓');
+    saveData();
+    await upsertToSupabase(newItem);
+    showToast('تمت إضافة الموقع بنجاح - متزامن سحابياً ✓');
   }
-  saveData();
-  form.reset(); editId.value=''; formSubmitBtn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> حفظ الموقع';
+  form.reset(); editId.value=''; if(formSubmitBtn) formSubmitBtn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> حفظ الموقع';
 });
 
-formResetBtn.addEventListener('click', ()=>{ form.reset(); editId.value=''; formSubmitBtn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> حفظ الموقع'; showToast('تم تفريغ النموذج'); });
-
-document.getElementById('btnGetCurrentLocation').addEventListener('click', ()=>{
+if(formResetBtn) formResetBtn.addEventListener('click', ()=>{ form.reset(); editId.value=''; if(formSubmitBtn) formSubmitBtn.innerHTML='<i class="fa-solid fa-floppy-disk"></i> حفظ الموقع'; showToast('تم تفريغ النموذج'); });
+const locBtn=document.getElementById('btnGetCurrentLocation');
+if(locBtn) locBtn.addEventListener('click', ()=>{
   if(!navigator.geolocation){ showToast('المتصفح لا يدعم تحديد الموقع','error'); return; }
   showToast('جاري تحديد موقعك الحالي...');
   navigator.geolocation.getCurrentPosition(pos=>{
-    fLat.value = pos.coords.latitude.toFixed(6);
-    fLng.value = pos.coords.longitude.toFixed(6);
-    showToast('تم التقاط إحداثيات موقعك ✓');
-  }, err=>{
-    showToast('تعذر تحديد الموقع: '+err.message,'error');
-  }, {enableHighAccuracy:true, timeout:10000});
+    fLat.value=pos.coords.latitude.toFixed(6); fLng.value=pos.coords.longitude.toFixed(6); showToast('تم التقاط إحداثيات موقعك ✓');
+  }, err=>{ showToast('تعذر تحديد الموقع: '+err.message,'error'); }, {enableHighAccuracy:true, timeout:10000});
 });
 
-// Admin table
-const adminSearch = document.getElementById('adminSearch');
-const adminTableBody = document.getElementById('adminTableBody');
-const adminEmpty = document.getElementById('adminEmpty');
-
+const adminSearch=document.getElementById('adminSearch');
+const adminTableBody=document.getElementById('adminTableBody');
+const adminEmpty=document.getElementById('adminEmpty');
 function editItem(id){
-  const it = DATA.find(x=> x.id===id);
-  if(!it) return;
-  editId.value = it.id;
-  fSub.value = it.sub;
-  fEquip.value = it.equip;
-  fName.value = it.name||'';
-  fAddress.value = it.address||'';
-  fLat.value = it.lat;
-  fLng.value = it.lng;
-  fNotes.value = it.notes||'';
-  formSubmitBtn.innerHTML='<i class="fa-solid fa-pen"></i> تحديث الموقع';
+  const it=DATA.find(x=> x.id===id); if(!it) return;
+  editId.value=it.id; fSub.value=it.sub; fEquip.value=it.equip; fName.value=it.name||''; fAddress.value=it.address||''; fLat.value=it.lat; fLng.value=it.lng; fNotes.value=it.notes||'';
+  if(formSubmitBtn) formSubmitBtn.innerHTML='<i class="fa-solid fa-pen"></i> تحديث الموقع';
   window.scrollTo({top:0, behavior:'smooth'});
   document.getElementById('locationForm').scrollIntoView({behavior:'smooth', block:'center'});
   showToast('وضع التعديل - عدّل البيانات ثم احفظ');
 }
-function deleteItem(id){
+async function deleteItem(id){
   if(!confirm('هل أنت متأكد من حذف هذا الموقع؟')) return;
-  DATA = DATA.filter(x=> x.id!==id);
+  DATA=DATA.filter(x=> x.id!==id);
   saveData();
-  showToast('تم الحذف');
+  await deleteFromSupabase(id);
+  showToast('تم الحذف - متزامن سحابياً');
 }
-function duplicateItem(id){
-  const it = DATA.find(x=> x.id===id);
-  if(!it) return;
-  const copy = {...it, id: Date.now().toString(), sub: it.sub+'-COPY', updatedAt: Date.now()};
-  DATA.unshift(copy);
-  saveData();
-  showToast('تم النسخ ✓');
+async function duplicateItem(id){
+  const it=DATA.find(x=> x.id===id); if(!it) return;
+  const copy={...it, id: Date.now().toString(), sub: it.sub+'-COPY', updatedAt: Date.now()};
+  DATA.unshift(copy); saveData(); await upsertToSupabase(copy); showToast('تم النسخ ✓');
 }
-
 function renderAdminTable(){
-  const q = (adminSearch.value||'').trim().toLowerCase();
-  let filtered = DATA;
-  if(q){
-    filtered = DATA.filter(it=>
-      it.sub.toLowerCase().includes(q) ||
-      it.equip.toLowerCase().includes(q) ||
-      (it.name||'').toLowerCase().includes(q) ||
-      (it.address||'').toLowerCase().includes(q)
-    );
-  }
-  const countEl = document.getElementById('adminFilteredCount');
-  if(countEl) countEl.textContent = filtered.length;
-
-  if(filtered.length===0){
-    adminTableBody.innerHTML='';
-    adminEmpty.classList.remove('hidden');
-    return;
-  }
+  const q=(adminSearch.value||'').trim().toLowerCase();
+  let filtered=DATA;
+  if(q){ filtered=DATA.filter(it=> it.sub.toLowerCase().includes(q) || it.equip.toLowerCase().includes(q) || (it.name||'').toLowerCase().includes(q) || (it.address||'').toLowerCase().includes(q)); }
+  const countEl=document.getElementById('adminFilteredCount'); if(countEl) countEl.textContent=filtered.length;
+  if(filtered.length===0){ adminTableBody.innerHTML=''; adminEmpty.classList.remove('hidden'); return; }
   adminEmpty.classList.add('hidden');
-  adminTableBody.innerHTML = filtered.map(it=>`
+  adminTableBody.innerHTML=filtered.map(it=>`
     <tr class="hover:bg-zinc-50 transition">
       <td class="px-4 py-3 font-mono font-bold text-xs">${escapeHtml(it.sub)}</td>
       <td class="px-4 py-3 font-mono font-bold text-xs">${escapeHtml(it.equip)}</td>
@@ -460,148 +452,122 @@ function renderAdminTable(){
       </td>
     </tr>
   `).join('');
-
   adminTableBody.querySelectorAll('button').forEach(btn=>{
-    const act = btn.dataset.act;
-    const id = btn.dataset.id;
+    const act=btn.dataset.act; const id=btn.dataset.id;
     btn.addEventListener('click', ()=>{
       if(act==='edit') editItem(id);
       else if(act==='del') deleteItem(id);
-      else if(act==='open'){
-        const it = DATA.find(x=>x.id===id);
-        window.open(googleMapsLink(it.lat,it.lng), '_blank');
-      } else if(act==='copy') duplicateItem(id);
+      else if(act==='open'){ const it=DATA.find(x=>x.id===id); window.open(googleMapsLink(it.lat,it.lng), '_blank'); }
+      else if(act==='copy') duplicateItem(id);
     });
   });
 }
+if(adminSearch) adminSearch.addEventListener('input', renderAdminTable);
 
-adminSearch.addEventListener('input', renderAdminTable);
-
-// CSV Export
-document.getElementById('btnExport').addEventListener('click', exportCSV);
-document.getElementById('btnDownloadTemplate').addEventListener('click', ()=>{
-  const csv = 'رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات\n3009990001,EQ-9999,مثال اسم المشترك,بريدة - حي المطار,26.3260,43.9750,ملاحظة تجريبية\n';
-  downloadFile(csv, 'قالب_غرب_القصيم.csv', 'text/csv;charset=utf-8;');
-  showToast('تم تحميل القالب ✓');
+// Export / Import
+const btnExport=document.getElementById('btnExport');
+if(btnExport) btnExport.addEventListener('click', exportCSV);
+const btnTemplate=document.getElementById('btnDownloadTemplate');
+if(btnTemplate) btnTemplate.addEventListener('click', ()=>{
+  const csv='رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات\n3009990001,EQ-9999,مثال اسم المشترك,بريدة - حي المطار,26.3260,43.9750,ملاحظة تجريبية\n';
+  downloadFile(csv,'قالب_غرب_القصيم.csv','text/csv;charset=utf-8;'); showToast('تم تحميل القالب ✓');
 });
-
 function exportCSV(){
-  const header = 'رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات,آخر تحديث';
-  const rows = DATA.map(it=> `"${it.sub}","${it.equip}","${(it.name||'').replace(/"/g,'""')}","${(it.address||'').replace(/"/g,'""')}",${it.lat},${it.lng},"${(it.notes||'').replace(/"/g,'""')}","${new Date(it.updatedAt).toISOString()}"`);
-  const csv = [header, ...rows].join('\n');
-  downloadFile(csv, `مواقع_غرب_القصيم_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
-  showToast('تم تصدير البيانات ✓');
+  const header='رقم الاشتراك,رقم التجهيز,اسم المشترك,العنوان,lat,lng,ملاحظات,آخر تحديث';
+  const rows=DATA.map(it=> `"${it.sub}","${it.equip}","${(it.name||'').replace(/"/g,'""')}","${(it.address||'').replace(/"/g,'""')}",${it.lat},${it.lng},"${(it.notes||'').replace(/"/g,'""')}","${new Date(it.updatedAt).toISOString()}"`);
+  const csv=[header, ...rows].join('\n');
+  downloadFile(csv,`مواقع_غرب_القصيم_${new Date().toISOString().slice(0,10)}.csv`,'text/csv;charset=utf-8;'); showToast('تم تصدير البيانات ✓');
 }
 function downloadFile(content, filename, mime){
-  const blob = new Blob(["\ufeff"+content], {type:mime}); // BOM for Excel Arabic
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const blob=new Blob(["\ufeff"+content], {type:mime}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
-
-// CSV Import
-const csvInput = document.getElementById('csvInput');
-const importLog = document.getElementById('importLog');
-csvInput.addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const text = await file.text();
-  // handle BOM
-  const clean = text.replace(/^\ufeff/, '');
-  const lines = clean.split(/\r?\n/).filter(l=> l.trim());
+const csvInput=document.getElementById('csvInput');
+const importLog=document.getElementById('importLog');
+if(csvInput) csvInput.addEventListener('change', async (e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const text=await file.text(); const clean=text.replace(/^\ufeff/,''); const lines=clean.split(/\r?\n/).filter(l=> l.trim());
   if(lines.length<2){ showToast('الملف فارغ أو غير صحيح','error'); return; }
-  const header = lines[0];
-  const hasArabicHeader = header.includes('رقم الاشتراك');
-  let startIdx = hasArabicHeader ? 1 : 0;
-  // Heuristic: if first line contains lat/lng numbers and no Arabic, treat as data
-  let added=0, skipped=0;
-  let logLines=[];
+  const header=lines[0]; const hasArabicHeader=header.includes('رقم الاشتراك'); let startIdx=hasArabicHeader?1:0;
+  let added=0, skipped=0; let logLines=[]; let newItems=[];
   for(let i=startIdx;i<lines.length;i++){
-    const line = lines[i];
-    // naive CSV split respecting quotes
-    const cols = parseCSVLine(line);
+    const line=lines[i]; const cols=parseCSVLine(line);
     if(cols.length<4){ skipped++; logLines.push(`سطر ${i+1}: أعمدة ناقصة`); continue; }
-    // Expected: sub, equip, name, address, lat, lng, notes
-    let sub = (cols[0]||'').trim();
-    let equip = (cols[1]||'').trim();
-    let name = (cols[2]||'').trim();
-    let address = (cols[3]||'').trim();
-    let lat = parseFloat(cols[4]);
-    let lng = parseFloat(cols[5]);
-    let notes = (cols[6]||'').trim();
-    // fallback: if lat/lng missing try to parse from address?
-    if(!sub || !equip){ skipped++; logLines.push(`سطر ${i+1}: رقم الاشتراك/التجهيز مفقود`); continue; }
-    if(isNaN(lat) || isNaN(lng)){
-      // try to find two numbers in line
-      const nums = line.match(/-?\d+\.\d+/g);
-      if(nums && nums.length>=2){ lat=parseFloat(nums[nums.length-2]); lng=parseFloat(nums[nums.length-1]); }
-    }
-    if(isNaN(lat) || isNaN(lng)){ skipped++; logLines.push(`سطر ${i+1}: إحداثيات غير صحيحة`); continue; }
-    // upsert: if sub exists, update
-    const existingIdx = DATA.findIndex(x=> x.sub===sub);
+    let sub=(cols[0]||'').trim(); let equip=(cols[1]||'').trim(); let name=(cols[2]||'').trim(); let address=(cols[3]||'').trim(); let lat=parseFloat(cols[4]); let lng=parseFloat(cols[5]); let notes=(cols[6]||'').trim();
+    if(!sub||!equip){ skipped++; logLines.push(`سطر ${i+1}: رقم الاشتراك/التجهيز مفقود`); continue; }
+    if(isNaN(lat)||isNaN(lng)){ const nums=line.match(/-?\d+\.\d+/g); if(nums&&nums.length>=2){ lat=parseFloat(nums[nums.length-2]); lng=parseFloat(nums[nums.length-1]); } }
+    if(isNaN(lat)||isNaN(lng)){ skipped++; logLines.push(`سطر ${i+1}: إحداثيات غير صحيحة`); continue; }
+    const existingIdx=DATA.findIndex(x=> x.sub===sub);
     if(existingIdx>-1){
-      DATA[existingIdx] = {...DATA[existingIdx], equip, name: name||DATA[existingIdx].name, address, lat, lng, notes, updatedAt: Date.now()};
-      added++;
-      logLines.push(`سطر ${i+1}: تحديث ${sub}`);
+      DATA[existingIdx]={...DATA[existingIdx], equip, name: name||DATA[existingIdx].name, address, lat, lng, notes, updatedAt: Date.now()};
+      newItems.push(DATA[existingIdx]);
+      added++; logLines.push(`سطر ${i+1}: تحديث ${sub}`);
     } else {
-      DATA.push({ id: Date.now().toString()+Math.random().toString(16).slice(2), sub, equip, name: name||'مشترك', address, lat, lng, notes, updatedAt: Date.now()});
-      added++;
-      logLines.push(`سطر ${i+1}: إضافة ${sub}`);
+      const nid=Date.now().toString()+Math.random().toString(16).slice(2);
+      const obj={ id: nid, sub, equip, name: name||'مشترك', address, lat, lng, notes, updatedAt: Date.now()};
+      DATA.push(obj); newItems.push(obj); added++; logLines.push(`سطر ${i+1}: إضافة ${sub}`);
     }
   }
   saveData();
+  if(useSupabase) await bulkUpsertToSupabase(newItems);
   importLog.classList.remove('hidden');
-  importLog.innerHTML = `<p class="font-bold mb-1">نتيجة الاستيراد: ${added} تم، ${skipped} تخطي</p>` + logLines.map(l=> `<div>${escapeHtml(l)}</div>`).join('');
+  importLog.innerHTML=`<p class="font-bold mb-1">نتيجة الاستيراد: ${added} تم، ${skipped} تخطي</p>`+logLines.map(l=> `<div>${escapeHtml(l)}</div>`).join('');
   showToast(`تم استيراد ${added} موقع${skipped?` - تخطي ${skipped}`:''} ✓`);
   csvInput.value='';
 });
-
 function parseCSVLine(line){
   const cols=[]; let cur=''; let inQuote=false;
-  for(let i=0;i<line.length;i++){
-    const ch=line[i];
-    if(ch==='"'){
-      if(inQuote && line[i+1]==='"'){ cur+='"'; i++; }
-      else inQuote=!inQuote;
-    } else if(ch===',' && !inQuote){
-      cols.push(cur); cur='';
-    } else cur+=ch;
-  }
-  cols.push(cur);
-  return cols.map(c=> c.trim().replace(/^"|"$/g,''));
+  for(let i=0;i<line.length;i++){ const ch=line[i]; if(ch==='"'){ if(inQuote && line[i+1]==='"'){ cur+='"'; i++; } else inQuote=!inQuote; } else if(ch===',' && !inQuote){ cols.push(cur); cur=''; } else cur+=ch; }
+  cols.push(cur); return cols.map(c=> c.trim().replace(/^"|"$/g,''));
 }
-
-document.getElementById('btnClearAll').addEventListener('click', ()=>{
+const btnClearAll=document.getElementById('btnClearAll');
+if(btnClearAll) btnClearAll.addEventListener('click', async ()=>{
   if(!confirm('هل أنت متأكد من حذف جميع المواقع؟ لا يمكن التراجع!')) return;
-  if(!confirm('تأكيد نهائي: سيتم حذف كل البيانات')) return;
-  DATA = [];
-  saveData();
+  if(!confirm('تأكيد نهائي: سيتم حذف كل البيانات من السحابة أيضاً')) return;
+  DATA=[]; saveData();
+  if(useSupabase) await clearSupabase();
   showToast('تم حذف جميع المواقع');
 });
 
-// Init
-updateStats();
-renderAdminTable();
-
-// Optional: Supabase sync placeholder - if user configures env
-async function trySupabaseSync(){
-  // Check if supabase url/key in localStorage
-  const url = localStorage.getItem('supabase_url');
-  const key = localStorage.getItem('supabase_key');
-  if(!url || !key) return;
-  // future: sync via supabase-js
-  console.log('Supabase config found, sync would go here', url);
-}
-trySupabaseSync();
-
-// Keyboard shortcut: Ctrl+K focus search
+// Keyboard shortcuts
 document.addEventListener('keydown', e=>{
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); searchInput.focus(); }
   if(e.key==='Escape'){ closeLogin(); closeAdmin(); }
 });
 
-// Expose for debugging
-window._DATA = DATA;
-window._save = saveData;
-document.body.style.background = "#F6F9FF";
-console.log("%c مكتب غرب القصيم للكهرباء - نظام المواقع جاهز ✓ ", "background:#0D5BBA;color:white;padding:8px 14px;border-radius:8px;font-weight:bold");
+// --- Init with Supabase ---
+async function boot(){
+  const local = loadLocal();
+  // show local first for fast paint
+  if(local){ DATA = local; updateStats(); renderAdminTable(); }
+  else { DATA = [...SEED]; saveLocal(); updateStats(); renderAdminTable(); }
 
+  // try supabase
+  const ok = await initSupabase();
+  if(ok){
+    try{
+      const remote = await fetchFromSupabase();
+      if(remote && remote.length>0){
+        DATA = remote;
+        saveLocal();
+        updateStats();
+        renderAdminTable();
+        showToast(`متصل بقاعدة البيانات - ${DATA.length} موقع متزامن ✓`);
+        // update supabaseBadge in stats?
+        const supBadge = document.createElement('span');
+        // optional: show in console
+      } else if(remote && remote.length===0){
+        // first time? push local to remote if remote empty but local has seed
+        if(local && local.length>0){
+          await bulkUpsertToSupabase(local);
+          showToast('تمت مزامنة البيانات المحلية إلى السحابة ✓');
+        }
+      }
+    }catch(e){ console.warn('fetch remote failed',e); }
+  }
+}
+boot();
+
+window._DATA=DATA;
+window._supabase=()=>supabaseClient;
+document.body.style.background="#F6F9FF";
+console.log("%c مكتب غرب القصيم للكهرباء - نظام المواقع السحابي جاهز ✓ ", "background:#0D5BBA;color:white;padding:8px 14px;border-radius:8px;font-weight:bold");

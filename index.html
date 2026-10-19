@@ -46,7 +46,8 @@
       </div>
       <div class="flex items-center gap-4">
         <span class="hidden sm:inline opacity-90">نظام معتمد من الشركة السعودية للكهرباء</span>
-        <span class="bg-white/15 px-3 py-1 rounded-full text-xs"><i class="fa-solid fa-shield-halved ml-1"></i> نظام آمن</span>
+        <span id="supabaseBadge" class="bg-amber-400 text-zinc-900 px-3 py-1 rounded-full text-xs font-black animate-pulse">جاري الاتصال بقاعدة البيانات...</span>
+        <span class="bg-white/15 px-3 py-1 rounded-full text-xs hidden sm:inline"><i class="fa-solid fa-shield-halved ml-1"></i> نظام آمن</span>
       </div>
     </div>
   </div>
@@ -386,6 +387,12 @@
     <div id="toastInner" class="bg-zinc-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 min-w-[280px] justify-center"></div>
   </div>
 
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <script>
+    window.SUPABASE_URL = "https://fvgweyyqoyoehrrhyhrx.supabase.co";
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ2Z3dleXlxb3lvZWhycmh5aHJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI0MzUzODEsImV4cCI6MjEwODAxMTM4MX0.pH7VyKi1qEsxyG75-7DvUPj8h5Q5TkLhLbVD2KPJwF8";
+  </script>
   <script type="module" src="/main.js"></script>
 </body>
 </html>
