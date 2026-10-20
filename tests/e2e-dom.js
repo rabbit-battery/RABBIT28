@@ -36,7 +36,8 @@ const localOnlyInterceptor = requestInterceptor((request) => {
   return undefined;
 });
 
-async function loadGame(pathAndQuery) {
+async function loadGame(pathAndQuery, opts) {
+  opts = opts || {};
   const errors = [];
   const clip = [];
   const vc = new VirtualConsole();
@@ -62,6 +63,7 @@ async function loadGame(pathAndQuery) {
         });
       } catch (e) {}
       window.addEventListener('error', (ev) => errors.push('window.error: ' + (ev.message || 'unknown')));
+      if (opts.beforeParse) { try { opts.beforeParse(window); } catch (e) { errors.push('beforeParse: ' + e.message); } }
     }
   });
   await sleep(250);
@@ -105,9 +107,9 @@ async function main() {
   let doc = g.doc;
   check('شاشة الرئيسية نشطة', active(doc, 'home'));
   check('بطاقة تحدي اليوم مبنية', $id(doc, 'dailyCard').innerHTML.includes('ابدأ التحدي'));
-  check('تحديان قابلان للعب في الشبكة', doc.querySelectorAll('#challengesGrid [data-start]').length === 2);
+  check('٣ تحديات قابلة للعب في الشبكة', doc.querySelectorAll('#challengesGrid [data-start]').length === 3);
   check('بطاقتا "قريبًا" واضحتان', doc.querySelectorAll('#challengesGrid .soon-tag').length === 2);
-  check('شارة عدد التحديات صحيحة', $id(doc, 'challengesCount').textContent.includes('تحدّيان'));
+  check('شارة عدد التحديات صحيحة', $id(doc, 'challengesCount').textContent.includes('٣ تحديات'));
   check('مفيش أخطاء جافاسكربت عند التحميل', g.errors.length === 0);
   if (g.errors.length) console.log('   أخطاء:', g.errors);
 
@@ -157,7 +159,9 @@ async function main() {
   check('عنوان نهاية سليم ومعروف: «' + endingTitle + '»', endingIds.includes(endingTitle));
   check('نص النهاية معروض', $id(doc, 'endingText').textContent.length > 30);
   check('اللقب الترفيهي معروض', $id(doc, 'playerTitleName').textContent.trim().length > 2);
-  check('أربع أشرطة قيم مرسومة', doc.querySelectorAll('#statsBars .stat-row').length === 4);
+  check('الملف النفسي مرسوم (٤ أبعاد في تحدي عادي)', doc.querySelectorAll('#profileDims .dim-row').length === 4);
+  check('كل بُعد عنده تفسير نفسي مكتوب', [...doc.querySelectorAll('#profileDims .dim-narr')].every((p) => p.textContent.length > 20));
+  check('تنبيه الترفيهية واضح في الملف', $id(doc, 'profileWrap').textContent.includes('ليس تقييمًا نفسيًا حقيقيًا'));
   check('قائمة أهم القرارات فيها نفس عدد قراراتك', doc.querySelectorAll('#resultHistoryList li').length === totalSteps);
   check('بطاقة المشاركة مملوءة بالنهاية واللقب',
     $id(doc, 'shareCardEnding').textContent === endingTitle &&
@@ -306,6 +310,49 @@ async function main() {
   await sleep(300);
   check('ويقدر يبدأ لعب طبيعي', active(g5.doc, 'game'));
   g5.win.close();
+
+  /* ---------- M: الوضع العميق «الملف ٢٨» + مؤقّت الضغط ---------- */
+  section('M) تحدّي «الملف ٢٨»: مؤقّت ضغط، تجمّد، وملف نفسي كامل');
+  const ch3 = DATA.CHALLENGES.find((c) => c.id === 'file-28');
+  let gm = await loadGame('/', {
+    beforeParse(win) { win.localStorage.setItem('loop_timer_sec', '3'); }
+  });
+  const mdoc = gm.doc;
+  check('شارة تحليل عميق ظاهرة على البطاقة', $id(mdoc, 'card-file-28').innerHTML.includes('تحليل عميق'));
+  mdoc.querySelector('[data-start="file-28"]').click();
+  await sleep(350);
+  check('بدأنا من المشهد الأول صح', $id(mdoc, 'sceneText').textContent === ch3.nodes[ch3.start].text);
+  check('شريط المؤقّت ظاهر أثناء اللعب', !$id(mdoc, 'timerWrap').classList.contains('hidden'));
+  check('زر تبديل المؤقّت ظاهر', !$id(mdoc, 'timerToggle').classList.contains('hidden'));
+
+  // سيب الوقت يخلص من غير ما تقرر → اختيار التجمد يتنفذ تلقائيًا
+  await sleep(4800);
+  check('بعد انتهاء المؤقّت: تسجلت أول قرار تلقائيًا', $id(mdoc, 'historyCount').textContent === '١');
+  check('رسالة المؤقّت واضحة في المشهد التالي', $id(mdoc, 'sceneResult').textContent.includes('انتهى المؤقّت'));
+  check('لسه في شاشة اللعب بعد التجمد', active(mdoc, 'game'));
+
+  // عطّل المؤقّت وأكمل الجولة كلها
+  $id(mdoc, 'timerToggle').click();
+  await sleep(250);
+  check('تعطيل المؤقّت من الزر يعمل', $id(mdoc, 'timerWrap').classList.contains('hidden'));
+  const mSteps = await playUntilResult(gm.win, (s) => s % 2);
+  check('وصلنا للنتيجة بعد جولة طويلة (١ + ' + mSteps + ' = ' + (mSteps + 1) + ' قرار)', active(mdoc, 'result') && (mSteps + 1) >= 10 && (mSteps + 1) <= 11);
+
+  const mEnding = $id(mdoc, 'endingTitle').textContent.trim();
+  const mEndingOk = Object.values(ch3.nodes).filter((n) => n.ending).some((n) => n.title === mEnding);
+  check('نهاية سليمة من نهايات الملف الستة: «' + mEnding + '»', mEndingOk);
+  check('الملف النفسي العميق: ٨ أبعاد مرسومة', mdoc.querySelectorAll('#profileDims .dim-row').length === 8);
+  check('كل الأبعاد مفسرّة نثريًا', [...mdoc.querySelectorAll('#profileDims .dim-narr')].every((p) => p.textContent.length > 30));
+  const mTitle = $id(mdoc, 'playerTitleName').textContent.trim();
+  check('نمط شخصية معروف: «' + mTitle + '»', DATA.PROFILE.archetypes.some((a) => a.name === mTitle));
+  check('بطاقتا القوة والنقطة العمياء ظاهرتان', mdoc.querySelectorAll('#profileWrap .arch-box').length === 2);
+  const obsCount = mdoc.querySelectorAll('#profileWrap .obs-list li').length;
+  check('ملاحظات سلوكية من لعبك الفعلي ≥ ٢ (' + obsCount + ')', obsCount >= 2);
+  check('من ملاحظاتك: التجمد تحت الضغط اترصّد', $id(mdoc, 'profileWrap').textContent.includes('التجمد') || $id(mdoc, 'profileWrap').textContent.includes('خلص وقتك') || $id(mdoc, 'profileWrap').textContent.includes('تجمّد'));
+  check('تنبيه «ليس تقييمًا نفسيًا حقيقيًا» واضح وصريح', $id(mdoc, 'profileWrap').textContent.includes('ليس تقييمًا نفسيًا حقيقيًا'));
+  const savedM = JSON.parse(gm.win.localStorage.getItem('loop_last_result'));
+  check('النتيجة المحفوظة تحمل الأبعاد النفسية الجديدة', savedM && typeof savedM.stats.empathy === 'number' && savedM.profile && savedM.profile.metrics.timeouts === 1);
+  gm.win.close();
 
   console.log('\n════════════════════════════════════');
   console.log('النتيجة: نجح ' + passed + ' | فشل ' + failed);

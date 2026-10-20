@@ -53,10 +53,15 @@ DATA.CHALLENGES.forEach((ch) => {
           const fx = c.effects || {};
           Object.keys(fx).forEach((k) => {
             if (!VALID_STATS.includes(k)) fail(id + '[' + i + ']: تأثير غير معروف "' + k + '"');
+            if (ch.stats && !ch.stats.includes(k)) fail(id + '[' + i + ']: تأثير خارج أبعاد التحدي "' + k + '"');
             if (!Number.isInteger(fx[k]) || fx[k] < 1 || fx[k] > 3) fail(id + '[' + i + ']: قيمة تأثير غريبة لـ ' + k + ' = ' + fx[k]);
           });
           if (!Object.keys(fx).length) fail(id + '[' + i + ']: اختيار بدون أي تأثير على المتغيرات');
         });
+        if (ch.timer) {
+          const hesitant = node.choices.filter((c) => c.hesitate === true).length;
+          if (hesitant !== 1) fail(id + ': تحدي المؤقّت لازم اختيار "تجمد/تردد" واحد بس لكل عقدة (الفعلي: ' + hesitant + ')');
+        }
       }
     }
   });
@@ -76,10 +81,11 @@ DATA.CHALLENGES.forEach((ch) => {
       totalPaths++;
       minLen = Math.min(minLen, depth);
       maxLen = Math.max(maxLen, depth);
-      if (depth < 5 || depth > 7) fail('مسار طوله ' + depth + ' قرارات (المطلوب ٥–٧) ينتهي عند ' + nodeId);
+      const st = ch.stages || { min: 5, max: 7 };
+      if (depth < st.min || depth > st.max) fail('مسار طوله ' + depth + ' قرارات (المطلوب ' + st.min + '–' + st.max + ') ينتهي عند ' + nodeId);
       return;
     }
-    if (depth > 10) { fail('مسار أطول من اللازم عند ' + nodeId + ' — احتمال لوب لا نهائي'); return; }
+    if (depth > 14) { fail('مسار أطول من اللازم عند ' + nodeId + ' — احتمال لوب لا نهائي'); return; }
     (node.choices || []).forEach((c) => {
       if (visited.has(c.next)) { fail('تكرار عقدة داخل جولة واحدة: ' + c.next); return; }
       const v2 = new Set(visited); v2.add(c.next);
@@ -112,9 +118,32 @@ DATA.CHALLENGES.forEach((ch) => {
     if (!state.finished) { fail('جولة عشوائية ما خلصتش'); break; }
     const summary = Engine.summarizeRun(state);
     if (!summary || !summary.endingTitle || !summary.title.name) { fail('ملخص نتيجة ناقص في محاكاة عشوائية'); break; }
-    if (!DATA.TITLES[summary.title.key]) { fail('لقب غير معروف: ' + summary.title.key); break; }
+    if (!Engine.getTitleByKey(summary.title.key)) { fail('لقب غير معروف: ' + summary.title.key); break; }
+    // الملف النفسي لازم يتبني دائمًا بشكل سليم
+    const prof = summary.profile;
+    const expectedDims = (ch.stats || []).length || Object.keys(DATA.STATS).length;
+    if (!prof || !Array.isArray(prof.dimensions) || prof.dimensions.length !== expectedDims) {
+      fail('ملف نفسي ناقص الأبعاد (' + (prof && prof.dimensions.length) + ' متوقع ' + expectedDims + ')'); break;
+    }
+    if (!prof.dimensions.every((d) => d.narrative && d.narrative.length > 10)) { fail('بعد نفسي من غير تفسير'); break; }
+    if (!Array.isArray(prof.observations)) { fail('ملاحظات سلوكية مش مصفوفة'); break; }
+    if (ch.deep && !prof.archetype) { fail('وضع deep وما طلعش نمط شخصية'); break; }
+    if (ch.deep && !DATA.PROFILE.archetypes.some((a) => a.id === prof.archetype.id)) { fail('نمط وهمي: ' + prof.archetype.id); break; }
   }
-  ok('٥٠٠ جولة عشوائية اكتملت بنجاح عبر المحرك');
+  ok('٥٠٠ جولة عشوائية اكتملت بنجاح عبر المحرك (شاملة بناء الملف النفسي)');
+
+  // --- فحص المؤقّت والتردد والتوقيتات عبر المحرك نفسه ---
+  if (ch.timer) {
+    let tRun = Engine.createRun(ch.id);
+    let guard = 0;
+    while (!tRun.finished && guard++ < 20) {
+      tRun = Engine.applyChoice(tRun, 0, { timeMs: 2500, timedOut: guard === 1 });
+    }
+    const tSum = Engine.summarizeRun(tRun);
+    if (!tSum || tSum.profile.metrics.timeouts !== 1) fail('المؤقّت: التجمد ما اتسجلش في القياسات');
+    else if (tSum.profile.metrics.avgDecisionMs !== 2500) fail('المؤقّت: متوسط سرعة القرار غلط');
+    else ok('قياسات المؤقّت والتجمد وسرعة القرار تُسجَّل صح');
+  }
 
   // --- ترميز/فك رابط النتيجة + المقارنة ---
   let demo = Engine.createRun(ch.id);

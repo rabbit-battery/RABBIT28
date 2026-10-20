@@ -68,6 +68,15 @@
 
     /* إعدادات */
     getSoundEnabled: function () { return get('sound', true); },
-    setSoundEnabled: function (v) { set('sound', !!v); }
+    setSoundEnabled: function (v) { set('sound', !!v); },
+
+    /* مؤقّت الضغط (وضع التوتر) */
+    getTimerEnabled: function () { return get('timer_on', true); },
+    setTimerEnabled: function (v) { set('timer_on', !!v); },
+    /* تجاوز اختياري لمدة المؤقّت بالثواني (يُستخدم في الاختبارات؛ ٠ = بدون تجاوز) */
+    getTimerSecondsOverride: function () {
+      var n = parseInt(get('timer_sec', 0), 10);
+      return (n >= 3 && n <= 120) ? n : 0;
+    }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

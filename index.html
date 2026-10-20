@@ -101,9 +101,9 @@
       <!-- كيف تلعب -->
       <div class="section-head"><h2>❓ كيف تلعب؟</h2></div>
       <ol class="how-list">
-        <li><span class="how-num">١</span><div><strong>اختار تحدي</strong><p>كل تحدي قصة قصيرة بمواقف متسلسلة (٥ إلى ٦ قرارات).</p></div></li>
-        <li><span class="how-num">٢</span><div><strong>قرّر ولاحظ النتيجة</strong><p>كل قرار بيغيّر الأحداث وبيزوّد قيمك: الجرأة 🔥 التعاون 🤝 الحذر 🧭 التضحية 💛</p></div></li>
-        <li><span class="how-num">٣</span><div><strong>اكتشف نهايتك ولقبك</strong><p>في الآخر هتوصل لواحدة من نهايات مختلفة وهتاخد لقب ترفيهي على قد أسلوب قراراتك.</p></div></li>
+        <li><span class="how-num">١</span><div><strong>اختار تحدي</strong><p>قصص قصيرة من ٥ قرارات... أو «الملف ٢٨»: ١٠ قرارات نفسية تحت مؤقّت ضغط للي عايز اختبار حقيقي ⏱️</p></div></li>
+        <li><span class="how-num">٢</span><div><strong>قرّر ولاحظ النتيجة</strong><p>كل قرار بيغيّر الأحداث وبيعلي قيم زي الجرأة 🔥 التعاطف 💗 السيطرة ♟️ والثقة 🫧 — وسرعة قرارك وترددك بيتحسبوا كمان.</p></div></li>
+        <li><span class="how-num">٣</span><div><strong>افتح ملفك في الآخر</strong><p>نهاية مختلفة + لقب + تحليل ترفيهي عميق لأسلوب قراراتك من «مقيّم متخفٍّ» كان بيراقبك طول اللعبة 👀</p></div></li>
         <li><span class="how-num">٤</span><div><strong>تحدَّ أصحابك</strong><p>ابعت لهم رابط نتيجتك... لما يخلّصوا هيشوفوا أنتم اتفقتم في كام قرار واختلفتم في ايه!</p></div></li>
       </ol>
 
@@ -129,6 +129,11 @@
         <span class="progress-text" id="progressText"></span>
       </div>
 
+      <div class="timer-wrap hidden" id="timerWrap" aria-label="مؤقّت القرار">
+        <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+        <span class="timer-text" id="timerText"></span>
+      </div>
+
       <div class="scene-card" id="sceneCard">
         <div class="scene-top">
           <span class="scene-label" id="sceneLabel"></span>
@@ -141,7 +146,10 @@
 
       <div class="game-bottom">
         <div class="stats-strip" id="statsStrip" aria-label="قيم قراراتك حتى الآن"></div>
-        <button class="btn btn-ghost btn-small" id="historyToggle" type="button">📜 قراراتي (<span id="historyCount">٠</span>)</button>
+        <div class="game-bottom-btns">
+          <button class="btn btn-ghost btn-small hidden" id="timerToggle" type="button" aria-label="تشغيل أو إيقاف مؤقّت الضغط">⏱️ المؤقّت: شغال</button>
+          <button class="btn btn-ghost btn-small" id="historyToggle" type="button">📜 قراراتي (<span id="historyCount">٠</span>)</button>
+        </div>
       </div>
 
       <div class="history-panel hidden" id="historyPanel">
@@ -167,13 +175,10 @@
         <p class="title-kicker">لقبك في الجولة دي</p>
         <h3 class="title-name"><span id="playerTitleIcon"></span> <span id="playerTitleName"></span></h3>
         <p class="title-line" id="playerTitleLine"></p>
-        <p class="title-disclaimer">لقب ترفيهي بيعكس قراراتك في اللعبة بس... مش حكم على شخصيتك 😉</p>
+        <p class="title-disclaimer">لقب ترفيهي بيعكس أسلوب قراراتك في اللعبة دي بس... مش حكم على شخصيتك الحقيقية 😉</p>
       </div>
 
-      <div class="panel">
-        <h3 class="panel-title">🧭 بصمة قراراتك</h3>
-        <div class="stats-bars" id="statsBars"></div>
-      </div>
+      <div class="panel" id="profileWrap"></div>
 
       <div class="panel">
         <h3 class="panel-title">📜 أهم قراراتك</h3>

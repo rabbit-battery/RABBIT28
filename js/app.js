@@ -18,7 +18,8 @@
     distances: null,       // خريطة مسافات للتقدم
     friendResult: null,    // نتيجة صديق جاية من الرابط
     currentResult: null,   // نتيجة الجولة المعروضة حاليًا في شاشة النتيجة
-    busy: false            // منع الضغط المزدوج أثناء الانتقالات
+    busy: false,           // منع الضغط المزدوج أثناء الانتقالات
+    sceneStartedAt: 0      // وقت عرض المشهد الحالي (لقياس سرعة القرار)
   };
 
   /* ---------- أدوات صغيرة ---------- */
@@ -41,6 +42,7 @@
   }
 
   function showScreen(name) {
+    stopSceneTimer();
     ['home', 'game', 'result'].forEach(function (s) {
       $('screen-' + s).classList.toggle('active', s === name);
     });
@@ -59,8 +61,101 @@
   function hideConfirm() { $('modalBackdrop').classList.add('hidden'); modalAction = null; }
 
   /* ============================================================
+     مؤقّت الضغط (وضع التوتر) — قرارات بوقت محسوب
+     ============================================================ */
+  var timerCtl = { id: null, active: false, endsAt: 0, total: 0, pausedRemain: 0, lastTickSec: -1 };
+
+  function currentChallenge() {
+    return state.run ? Engine.getChallenge(state.run.challengeId) : null;
+  }
+  function timerApplies(ch) { return !!(ch && ch.timer && Storage.getTimerEnabled()); }
+  function timerSecondsFor(ch) { return Storage.getTimerSecondsOverride() || (ch && ch.timer) || 0; }
+
+  function startSceneTimer() {
+    stopSceneTimer();
+    var ch = currentChallenge();
+    var wrap = $('timerWrap');
+    if (!timerApplies(ch)) { wrap.classList.add('hidden'); return; }
+    var secs = timerSecondsFor(ch);
+    if (!secs) { wrap.classList.add('hidden'); return; }
+    timerCtl.total = secs * 1000;
+    timerCtl.endsAt = Date.now() + timerCtl.total;
+    timerCtl.active = true;
+    timerCtl.lastTickSec = -1;
+    wrap.classList.remove('hidden');
+    timerCtl.id = setInterval(tickTimer, 100);
+    tickTimer();
+  }
+
+  function tickTimer() {
+    var remain = timerCtl.endsAt - Date.now();
+    if (remain <= 0) { stopSceneTimer(); onSceneTimeout(); return; }
+    var fillEl = $('timerFill');
+    fillEl.style.width = Math.max(0, (remain / timerCtl.total) * 100) + '%';
+    fillEl.classList.toggle('urgent', remain < 6000);
+    var s = Math.ceil(remain / 1000);
+    $('timerText').textContent = '⏱️ ' + toAr(s);
+    if (s <= 3 && s !== timerCtl.lastTickSec) { timerCtl.lastTickSec = s; Sound.tick(); }
+  }
+
+  function stopSceneTimer() {
+    if (timerCtl.id) { clearInterval(timerCtl.id); timerCtl.id = null; }
+    timerCtl.active = false;
+    timerCtl.pausedRemain = 0;
+  }
+
+  function onSceneTimeout() {
+    if (!state.run || state.busy) return;
+    var ch = currentChallenge();
+    if (!ch) return;
+    var node = ch.nodes[state.run.nodeId];
+    if (!node || !node.choices) return;
+    var idx = -1;
+    node.choices.forEach(function (c, i) { if (c.hesitate === true && idx === -1) idx = i; });
+    if (idx < 0) idx = node.choices.length - 1;
+    var btns = $('choicesWrap').querySelectorAll('.choice-btn');
+    choose(idx, btns[idx] || null, { timedOut: true });
+  }
+
+  function updateTimerToggle() {
+    var btn = $('timerToggle');
+    var ch = currentChallenge();
+    if (!ch || !ch.timer) { btn.classList.add('hidden'); return; }
+    btn.classList.remove('hidden');
+    btn.textContent = Storage.getTimerEnabled() ? '⏱️ المؤقّت: شغال' : '⏱️ المؤقّت: واقف';
+  }
+
+  /* إيقاف المؤقّت مؤقتًا عند إخفاء التبويب عشان ما يظلمش اللاعب */
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timerCtl.active && timerCtl.id) {
+        timerCtl.pausedRemain = Math.max(0, timerCtl.endsAt - Date.now());
+        clearInterval(timerCtl.id);
+        timerCtl.id = null;
+      }
+    } else if (timerCtl.active && !timerCtl.id && timerCtl.pausedRemain > 0) {
+      timerCtl.endsAt = Date.now() + timerCtl.pausedRemain;
+      timerCtl.pausedRemain = 0;
+      timerCtl.id = setInterval(tickTimer, 100);
+      tickTimer();
+    }
+  });
+
+  /* ============================================================
      الشاشة الرئيسية
      ============================================================ */
+  function challengeBadges(ch) {
+    var b = '';
+    if (ch.deep) b += '<span class="ch-badge deep">🧠 تحليل عميق</span>';
+    if (ch.timer) b += '<span class="ch-badge timer">⏱️ مؤقّت ضغط ' + toAr(ch.timer) + ' ث/قرار</span>';
+    return b ? '<div class="challenge-badges">' + b + '</div>' : '';
+  }
+  function challengeMeta(ch) {
+    var m = '⏱️ ' + ch.minutes;
+    if (ch.stages) m += ' • ' + toAr(ch.stages.min) + '–' + toAr(ch.stages.max) + ' قرارات';
+    return m;
+  }
+
   function renderHome() {
     var daily = Engine.getDailyChallenge();
 
@@ -70,10 +165,11 @@
         '<span class="daily-tag">🌟 تحدي اليوم</span>' +
         '<h2 class="daily-title">' + esc(daily.icon) + ' ' + esc(daily.title) + '</h2>' +
         '<p class="daily-tagline">' + esc(daily.tagline) + '</p>' +
+        challengeBadges(daily) +
         '<p class="daily-desc">' + esc(daily.description) + '</p>' +
         '<div class="daily-actions">' +
           '<button class="btn btn-primary" type="button" data-start="' + esc(daily.id) + '">ابدأ التحدي ▶</button>' +
-          '<span class="daily-meta">⏱️ ' + esc(daily.minutes) + ' • نهايات متعددة حسب قراراتك</span>' +
+          '<span class="daily-meta">' + esc(challengeMeta(daily)) + ' • نهايات متعددة حسب قراراتك</span>' +
         '</div>' +
       '</div>';
 
@@ -88,11 +184,12 @@
       card.innerHTML =
         '<div class="challenge-icon">' + esc(ch.icon) + '</div>' +
         '<h3 class="challenge-name">' + esc(ch.title) + '</h3>' +
+        challengeBadges(ch) +
         '<p class="challenge-tagline">' + esc(ch.tagline) + '</p>' +
         '<p class="challenge-desc">' + esc(ch.description) + '</p>' +
         '<div class="challenge-foot">' +
           '<button class="btn btn-primary btn-small" type="button" data-start="' + esc(ch.id) + '">العب دلوقتي</button>' +
-          '<span class="challenge-minutes">⏱️ ' + esc(ch.minutes) + '</span>' +
+          '<span class="challenge-minutes">' + esc(challengeMeta(ch)) + '</span>' +
         '</div>';
       grid.appendChild(card);
     });
@@ -150,7 +247,7 @@
     if (!ch) { banner.classList.add('hidden'); state.friendResult = null; return; }
 
     var endingNode = ch.nodes[fr.endingId];
-    var titleData = DATA.TITLES[fr.titleKey];
+    var titleData = Engine.getTitleByKey(fr.titleKey);
     var endingTxt = endingNode && endingNode.ending ? 'وصل لنهاية «' + endingNode.title + '» ' + endingNode.icon : 'خلّص التحدي';
     var titleTxt = titleData ? ' وخد لقب «' + titleData.name + '» ' + titleData.icon : '';
     $('friendBannerText').textContent = 'صديقك لعب «' + ch.title + '» و' + endingTxt + titleTxt +
@@ -285,12 +382,16 @@
 
     renderStatsStrip();
     renderHistoryPanel();
+    updateTimerToggle();
+    state.sceneStartedAt = Date.now();
+    startSceneTimer();
   }
 
   function renderStatsStrip(changedKeys) {
     var strip = $('statsStrip');
     strip.innerHTML = '';
-    Object.keys(STATS).forEach(function (k) {
+    var keys = state.run ? Engine.statKeysFor(currentChallenge()) : Object.keys(STATS);
+    keys.forEach(function (k) {
       var chip = document.createElement('span');
       chip.className = 'stat-chip' + (changedKeys && changedKeys.indexOf(k) !== -1 ? ' bump' : '');
       chip.style.borderColor = STATS[k].color + '66';
@@ -330,17 +431,22 @@
   }
 
   /* ---------- اختيار ---------- */
-  function choose(index, btnEl) {
+  function choose(index, btnEl, opts) {
     if (!state.run || state.busy) return;
     state.busy = true;
+    stopSceneTimer();
     Sound.choose();
 
     var buttons = $('choicesWrap').querySelectorAll('.choice-btn');
     buttons.forEach(function (b) { b.disabled = true; });
     if (btnEl) btnEl.classList.add('selected');
 
+    var elapsed = state.sceneStartedAt ? (Date.now() - state.sceneStartedAt) : null;
     var prevStats = Object.assign({}, state.run.stats);
-    var newRun = Engine.applyChoice(state.run, index);
+    var newRun = Engine.applyChoice(state.run, index, {
+      timeMs: elapsed,
+      timedOut: !!(opts && opts.timedOut)
+    });
     if (!newRun) { state.busy = false; buttons.forEach(function (b) { b.disabled = false; }); return; }
     state.run = newRun;
     Storage.saveRun(newRun);
@@ -405,33 +511,69 @@
     // الإضافات (مشاركة/مقارنة) لا يجب أن يجمّد اللاعب أبدًا
     showScreen('result');
 
-    // أشرطة القيم
-    var barsWrap = $('statsBars');
-    barsWrap.innerHTML = '';
-    var max = 1;
-    Object.keys(STATS).forEach(function (k) { max = Math.max(max, summary.stats[k] || 0); });
-    Object.keys(STATS).forEach(function (k) {
-      var val = summary.stats[k] || 0;
-      var row = document.createElement('div');
-      row.className = 'stat-row';
-      row.innerHTML =
-        '<span class="stat-row-label">' + esc(STATS[k].icon) + ' ' + esc(STATS[k].label) + '</span>' +
-        '<span class="stat-track"><span class="stat-fill" style="background:' + esc(STATS[k].color) + '"></span></span>' +
-        '<span class="stat-row-val">' + toAr(val) + '</span>';
-      barsWrap.appendChild(row);
-      // الحركة بعد الرسم بفريم
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          row.querySelector('.stat-fill').style.width = (val > 0 ? Math.max(8, (val / max) * 100) : 0) + '%';
-        });
-      });
-    });
+    renderProfile(summary);
 
     fillHistoryList($('resultHistoryList'), summary.history);
 
     // المقارنة والمشاركة إضافات — لا يُسمح لخطأ فيها بإخفاء النتيجة
     try { renderComparison(summary); } catch (e) { console.error(e); }
     try { wireResultActions(summary); } catch (e) { console.error(e); }
+  }
+
+  /* ---------- الملف النفسي الترفيهي في شاشة النتيجة ---------- */
+  function renderProfile(summary) {
+    var wrap = $('profileWrap');
+    var profile = summary.profile || { dimensions: [], observations: [], archetype: null, disclaimer: '' };
+
+    var html = '<h3 class="panel-title">🧠 ملفك النفسي في الجولة دي — قراءة «المقيّم المتخفٍّ»</h3>';
+
+    if (profile.archetype) {
+      html += '<div class="arch-extra">' +
+        '<div class="arch-box strength"><strong>✨ نقطة قوتك</strong><p>' + esc(profile.archetype.strength) + '</p></div>' +
+        '<div class="arch-box blind"><strong>🌑 نقطتك العمياء</strong><p>' + esc(profile.archetype.blind) + '</p></div>' +
+        '</div>';
+    }
+
+    html += '<div id="profileDims"></div>';
+
+    if (profile.observations && profile.observations.length) {
+      html += '<div class="obs-block"><h3 class="panel-title">📋 ملاحظات اتكتبت عنك أثناء اللعب</h3>' +
+        '<ul class="obs-list">' +
+        profile.observations.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') +
+        '</ul></div>';
+    }
+
+    if (profile.disclaimer) {
+      html += '<p class="profile-disclaimer">' + esc(profile.disclaimer) + '</p>';
+    }
+
+    wrap.innerHTML = html;
+
+    var dimsWrap = wrap.querySelector('#profileDims');
+    var max = 1;
+    (profile.dimensions || []).forEach(function (d) { max = Math.max(max, d.value); });
+    var levelNames = { high: 'مرتفع', mid: 'متوازن', low: 'منخفض' };
+
+    (profile.dimensions || []).forEach(function (d) {
+      var row = document.createElement('div');
+      row.className = 'dim-row';
+      row.innerHTML =
+        '<div class="dim-head">' +
+          '<span class="dim-name">' + esc(d.icon) + ' ' + esc(d.label) + '</span>' +
+          '<span class="dim-level ' + esc(d.level) + '">' + esc(levelNames[d.level] || '') + '</span>' +
+          '<span class="dim-val">' + toAr(d.value) + '</span>' +
+        '</div>' +
+        '<span class="stat-track"><span class="stat-fill" style="background:' + esc(d.color) + '"></span></span>' +
+        '<p class="dim-narr"></p>';
+      row.querySelector('.dim-narr').textContent = d.narrative;
+      dimsWrap.appendChild(row);
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          row.querySelector('.stat-fill').style.width =
+            (d.value > 0 ? Math.max(8, (d.value / max) * 100) : 0) + '%';
+        });
+      });
+    });
   }
 
   function renderComparison(summary) {
@@ -456,7 +598,7 @@
 
     var cmp = Share.compareWithFriend(summary.history, fr);
     var friendEnding = ch.nodes[fr.endingId];
-    var friendTitle = DATA.TITLES[fr.titleKey];
+    var friendTitle = Engine.getTitleByKey(fr.titleKey);
     var sameEnding = fr.endingId === summary.endingId;
 
     wrap.innerHTML =
@@ -514,7 +656,9 @@
     Sound.click();
     var canvas = $('cardCanvas');
     try {
-      Share.drawResultCard(canvas, summary, STATS);
+      var meta = {};
+      (summary.statKeys || Object.keys(STATS)).forEach(function (k) { if (STATS[k]) meta[k] = STATS[k]; });
+      Share.drawResultCard(canvas, summary, meta);
       Share.canvasToBlob(canvas).then(function (blob) {
         if (!blob) { toast('⚠️ تعذر إنشاء الصورة على الجهاز ده.'); return; }
         var file = new File([blob], 'loop-result.png', { type: 'image/png' });
@@ -648,6 +792,22 @@
     $('historyToggle').addEventListener('click', function () {
       Sound.click();
       $('historyPanel').classList.toggle('hidden');
+    });
+    $('timerToggle').addEventListener('click', function () {
+      var nowOn = !Storage.getTimerEnabled();
+      Storage.setTimerEnabled(nowOn);
+      Sound.click();
+      updateTimerToggle();
+      if (!state.run) return;
+      if (nowOn) {
+        state.sceneStartedAt = Date.now();
+        startSceneTimer();
+        toast('⏱️ المؤقّت اشتغل... الضغط رسميًا بدأ!');
+      } else {
+        stopSceneTimer();
+        $('timerWrap').classList.add('hidden');
+        toast('⏱️ المؤقّت اتوقف. العب على مهلك.');
+      }
     });
 
     /* نافذة التأكيد */

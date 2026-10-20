@@ -217,8 +217,11 @@
     ctx.font = '800 64px Cairo, Tahoma, sans-serif';
     ctx.fillText(result.title.icon + ' ' + result.title.name, W / 2, 830);
 
-    // أشرطة القيم
-    var keys = Object.keys(statsMeta);
+    // أشرطة القيم — أعلى ٤ أبعاد فقط عشان البطاقة ما تزحمش
+    var keys = Object.keys(statsMeta)
+      .filter(function (k) { return statsMeta[k] && result.stats && (k in result.stats); })
+      .sort(function (a, b) { return (result.stats[b] || 0) - (result.stats[a] || 0); })
+      .slice(0, 4);
     var max = 1;
     keys.forEach(function (k) { max = Math.max(max, result.stats[k] || 0); });
     var barX = 140, barW = 560, labelX = 760, y = 920;

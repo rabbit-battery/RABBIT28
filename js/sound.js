@@ -38,6 +38,7 @@
     setEnabled: function (v) { enabled = !!v; },
     isEnabled: function () { return enabled; },
     click: function () { tone(520, 0, 0.08, 'sine', 0.05); },
+    tick: function () { tone(980, 0, 0.06, 'square', 0.035); },
     choose: function () { tone(440, 0, 0.1, 'triangle', 0.07); tone(660, 0.07, 0.14, 'triangle', 0.07); },
     finish: function () {
       tone(523.25, 0, 0.18, 'triangle', 0.08);
