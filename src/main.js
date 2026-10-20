@@ -768,3 +768,7 @@ app.addEventListener("click", (e) => {
 // ---------- الإقلاع ----------
 readUrlParams();
 render();
+// رابط مشاركة تحدي مباشر (?c=) بدون نتيجة صديق: افتح مقدمة التحدي فورًا
+if (state.preselectedChallengeId && !state.friendResult) {
+  openChallenge(state.preselectedChallengeId);
+}

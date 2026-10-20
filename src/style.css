@@ -339,6 +339,8 @@ a { color: inherit; }
 .share-card { margin-top: 16px; padding: 24px; }
 .share-card p { color: var(--text-dim); font-size: 0.94rem; margin-bottom: 14px; }
 .share-preview { width: 100%; max-width: 330px; border-radius: 18px; border: 1px solid var(--border-strong); box-shadow: var(--shadow); display: block; margin: 14px auto 18px; }
+.share-preview:not([src]) { aspect-ratio: 4 / 5; color: transparent; background: linear-gradient(110deg, rgba(124,58,237,0.16) 30%, rgba(56,189,248,0.22) 50%, rgba(124,58,237,0.16) 70%); background-size: 200% 100%; animation: cardLoading 1.2s linear infinite; }
+@keyframes cardLoading { from { background-position: 120% 0; } to { background-position: -80% 0; } }
 
 .result-actions { margin-top: 18px; display: grid; gap: 11px; }
 .plays-note { text-align: center; color: var(--text-faint); font-size: 0.86rem; margin-top: 16px; }
