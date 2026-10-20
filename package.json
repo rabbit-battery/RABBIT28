@@ -1,10 +1,12 @@
-
 {
-  "name": "rabbit-battery-demo",
+  "name": "loop-game",
   "version": "1.0.0",
+  "description": "LOOP — لعبة قرارات تفاعلية اجتماعية باللغة العربية. اختياراتك بتحكي قصتك.",
+  "private": true,
   "scripts": {
-    "build": "echo Building project... && mkdir -p dist && cp index.html dist/index.html"
-  },
-  "dependencies": {},
-  "devDependencies": {}
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/validate-story.js",
+    "test:e2e": "node tests/e2e-dom.js"
+  }
 }

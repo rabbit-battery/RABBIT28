@@ -1,13 +1,241 @@
-
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rabbit Battery</title>
-  </head>
-  <body>
-    <h1>Welcome to Rabbit Battery System</h1>
-    <p>This is a demo project for internal testing.</p>
-  </body>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>LOOP — قرار واحد ممكن يغيّر كل حاجة</title>
+  <meta name="description" content="لعبة LOOP: لعبة قرارات تفاعلية بالعربي. ادخل موقف خيالي، واختياراتك هتحكي قصتك وتحدد نهايتك. العب وتحدَّ أصحابك!" />
+  <meta name="theme-color" content="#0a0618" />
+
+  <!-- مشاركة اجتماعية (Open Graph) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="LOOP — قرار واحد ممكن يغيّر كل حاجة" />
+  <meta property="og:description" content="لعبة قرارات تفاعلية بالعربي. اختياراتك بتحكي قصتك... يا ترى قراراتك هتوصلك لأنهي نهاية؟" />
+  <meta property="og:locale" content="ar_AR" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="LOOP — قرار واحد ممكن يغيّر كل حاجة" />
+  <meta name="twitter:description" content="لعبة قرارات تفاعلية بالعربي. اختياراتك بتحكي قصتك... جرب وتحدَّ أصحابك!" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- خلفية متحركة خفيفة -->
+  <div class="bg-orbs" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+  </div>
+
+  <!-- الشريط العلوي -->
+  <header class="topbar">
+    <button class="brand" id="brandBtn" type="button" aria-label="الصفحة الرئيسية للعبة LOOP">
+      <img src="favicon.svg" alt="" class="brand-mark" width="34" height="34" />
+      <span class="brand-name">LOOP</span>
+    </button>
+    <button class="icon-btn" id="soundToggle" type="button" aria-label="تشغيل أو كتم الصوت">🔊</button>
+  </header>
+
+  <main class="app">
+
+    <!-- ================= الشاشة الرئيسية ================= -->
+    <section id="screen-home" class="screen active" aria-label="الصفحة الرئيسية">
+
+      <div class="hero">
+        <div class="hero-logo" aria-hidden="true">
+          <img src="favicon.svg" alt="" width="86" height="86" />
+        </div>
+        <h1 class="hero-title">LOOP</h1>
+        <p class="hero-slogan">قرار واحد ممكن يغيّر كل حاجة</p>
+        <p class="hero-desc">
+          لعبة قرارات اجتماعية: هتدخل موقف خيالي، وكل اختيار منك هيغيّر اللي جاي بعده
+          لحد ما توصل لنهايتك الخاصة. اختياراتك بتحكي قصتك... يا ترى قصتك هتخلص ازاي؟ 🔮
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-big" id="heroStartBtn" type="button">🎮 ابدأ اللعب</button>
+          <button class="btn btn-ghost" id="heroShareBtn" type="button">📤 شارك اللعبة مع أصحابك</button>
+        </div>
+        <p class="hero-meta" id="heroMeta"></p>
+      </div>
+
+      <!-- رسالة صديق وصل بنتيجة -->
+      <div class="notice notice-friend hidden" id="friendBanner" role="status">
+        <span class="notice-icon">👋</span>
+        <div>
+          <strong id="friendBannerTitle">صديقك بيتحداك</strong>
+          <p id="friendBannerText"></p>
+        </div>
+        <button class="btn btn-small btn-primary" id="friendBannerBtn" type="button">العب وقارن</button>
+      </div>
+
+      <!-- استكمال جولة سابقة -->
+      <div class="notice notice-resume hidden" id="resumeBanner" role="status">
+        <span class="notice-icon">⏳</span>
+        <div>
+          <strong>عندك جولة لسه ما خلصتش</strong>
+          <p id="resumeText"></p>
+        </div>
+        <div class="notice-actions">
+          <button class="btn btn-small btn-primary" id="resumeBtn" type="button">كمّل لعب</button>
+          <button class="btn btn-small btn-ghost" id="resumeDiscardBtn" type="button">ابدأ من الأول</button>
+        </div>
+      </div>
+
+      <!-- تحدي اليوم -->
+      <div class="daily-card" id="dailyCard"></div>
+
+      <!-- كل التحديات -->
+      <div class="section-head">
+        <h2>🎯 التحديات</h2>
+        <span class="badge" id="challengesCount"></span>
+      </div>
+      <div class="challenges-grid" id="challengesGrid"></div>
+
+      <!-- آخر نتيجة -->
+      <div id="lastResultWrap"></div>
+
+      <!-- كيف تلعب -->
+      <div class="section-head"><h2>❓ كيف تلعب؟</h2></div>
+      <ol class="how-list">
+        <li><span class="how-num">١</span><div><strong>اختار تحدي</strong><p>قصص قصيرة من ٥ قرارات... أو «الملف ٢٨»: ١٠ قرارات نفسية تحت مؤقّت ضغط للي عايز اختبار حقيقي ⏱️</p></div></li>
+        <li><span class="how-num">٢</span><div><strong>قرّر ولاحظ النتيجة</strong><p>كل قرار بيغيّر الأحداث وبيعلي قيم زي الجرأة 🔥 التعاطف 💗 السيطرة ♟️ والثقة 🫧 — وسرعة قرارك وترددك بيتحسبوا كمان.</p></div></li>
+        <li><span class="how-num">٣</span><div><strong>افتح ملفك في الآخر</strong><p>نهاية مختلفة + لقب + تحليل ترفيهي عميق لأسلوب قراراتك من «مقيّم متخفٍّ» كان بيراقبك طول اللعبة 👀</p></div></li>
+        <li><span class="how-num">٤</span><div><strong>تحدَّ أصحابك</strong><p>ابعت لهم رابط نتيجتك... لما يخلّصوا هيشوفوا أنتم اتفقتم في كام قرار واختلفتم في ايه!</p></div></li>
+      </ol>
+
+      <footer class="home-footer">
+        <p>LOOP — الإصدار الأول 🎈</p>
+        <p class="footer-note">
+          تقدّمك ونتائجك بيتحفظوا على جهازك بس (من غير حساب ومن غير تتبّع).
+          مشاركة النتائج بتم عن طريق الرابط نفسه، فمافيش أي بيانات بتتقال بتتسجل برا جهازك.
+        </p>
+      </footer>
+    </section>
+
+    <!-- ================= شاشة اللعب ================= -->
+    <section id="screen-game" class="screen" aria-label="شاشة اللعب">
+      <div class="game-top">
+        <button class="btn btn-ghost btn-small" id="gameHomeBtn" type="button">🏠 الرئيسية</button>
+        <span class="game-title" id="gameChallengeTitle"></span>
+        <button class="btn btn-ghost btn-small" id="gameRestartBtn" type="button">↩️ من الأول</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <span class="progress-text" id="progressText"></span>
+      </div>
+
+      <div class="timer-wrap hidden" id="timerWrap" aria-label="مؤقّت القرار">
+        <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+        <span class="timer-text" id="timerText"></span>
+      </div>
+
+      <div class="scene-card" id="sceneCard">
+        <div class="scene-top">
+          <span class="scene-label" id="sceneLabel"></span>
+        </div>
+        <p class="scene-result hidden" id="sceneResult"></p>
+        <p class="scene-text" id="sceneText"></p>
+      </div>
+
+      <div class="choices" id="choicesWrap" role="group" aria-label="اختياراتك"></div>
+
+      <div class="game-bottom">
+        <div class="stats-strip" id="statsStrip" aria-label="قيم قراراتك حتى الآن"></div>
+        <div class="game-bottom-btns">
+          <button class="btn btn-ghost btn-small hidden" id="timerToggle" type="button" aria-label="تشغيل أو إيقاف مؤقّت الضغط">⏱️ المؤقّت: شغال</button>
+          <button class="btn btn-ghost btn-small" id="historyToggle" type="button">📜 قراراتي (<span id="historyCount">٠</span>)</button>
+        </div>
+      </div>
+
+      <div class="history-panel hidden" id="historyPanel">
+        <h3>قراراتك في الجولة دي</h3>
+        <ol class="history-list" id="historyList"></ol>
+      </div>
+
+      <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
+    </section>
+
+    <!-- ================= شاشة النتيجة ================= -->
+    <section id="screen-result" class="screen" aria-label="نتيجة الجولة">
+      <p class="result-kicker">وصلت لنهايتك في <span id="resultChallengeTitle"></span></p>
+
+      <div class="ending-card" id="endingCard">
+        <div class="ending-icon" id="endingIcon"></div>
+        <span class="ending-tone" id="endingTone"></span>
+        <h2 class="ending-title" id="endingTitle"></h2>
+        <p class="ending-text" id="endingText"></p>
+      </div>
+
+      <div class="title-card">
+        <p class="title-kicker">لقبك في الجولة دي</p>
+        <h3 class="title-name"><span id="playerTitleIcon"></span> <span id="playerTitleName"></span></h3>
+        <p class="title-line" id="playerTitleLine"></p>
+        <p class="title-disclaimer">لقب ترفيهي بيعكس أسلوب قراراتك في اللعبة دي بس... مش حكم على شخصيتك الحقيقية 😉</p>
+      </div>
+
+      <div class="panel" id="profileWrap"></div>
+
+      <div class="panel">
+        <h3 class="panel-title">📜 أهم قراراتك</h3>
+        <ol class="history-list" id="resultHistoryList"></ol>
+      </div>
+
+      <div id="compareWrap"></div>
+
+      <!-- بطاقة المشاركة -->
+      <div class="share-card" id="shareCard">
+        <div class="share-card-inner">
+          <span class="share-logo">LOOP</span>
+          <span class="share-card-challenge" id="shareCardChallenge"></span>
+          <span class="share-card-ending"><span id="shareCardEndingIcon"></span> <span id="shareCardEnding"></span></span>
+          <span class="share-card-title"><span id="shareCardTitleIcon"></span> <span id="shareCardTitle"></span></span>
+          <span class="share-card-quote">قرار واحد ممكن يغيّر كل حاجة... دورك دلوقتي 🎮</span>
+        </div>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn btn-primary btn-big" id="challengeFriendsBtn" type="button">⚔️ تحدَّ أصحابك</button>
+        <div class="share-row">
+          <a class="btn btn-whatsapp" id="waShareBtn" href="#" target="_blank" rel="noopener">💬 واتساب</a>
+          <a class="btn btn-telegram" id="tgShareBtn" href="#" target="_blank" rel="noopener">✈️ تيليجرام</a>
+          <button class="btn btn-ghost" id="copyLinkBtn" type="button">🔗 انسخ رابط اللعبة</button>
+        </div>
+        <button class="btn btn-ghost" id="downloadCardBtn" type="button">🖼️ شارك بطاقة النتيجة كصورة</button>
+        <div class="share-row">
+          <button class="btn btn-primary" id="playAgainBtn" type="button">🔁 العب مرة أخرى</button>
+          <button class="btn btn-ghost" id="resultHomeBtn" type="button">🏠 القائمة الرئيسية</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- نافذة تأكيد -->
+  <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3 id="modalTitle"></h3>
+      <p id="modalText"></p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="modalConfirm" type="button">تمام</button>
+        <button class="btn btn-ghost" id="modalCancel" type="button">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- تنبيهات -->
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+  <canvas id="cardCanvas" class="hidden" aria-hidden="true"></canvas>
+
+  <script src="js/data/challenges.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/share.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/app.js"></script>
+</body>
 </html>
