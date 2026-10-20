@@ -401,6 +401,10 @@
     $('shareCardTitleIcon').textContent = summary.title.icon;
     $('shareCardTitle').textContent = summary.title.name;
 
+    // اعرض شاشة النتيجة فورًا بعد الأساسيات — أي خطأ لاحق في
+    // الإضافات (مشاركة/مقارنة) لا يجب أن يجمّد اللاعب أبدًا
+    showScreen('result');
+
     // أشرطة القيم
     var barsWrap = $('statsBars');
     barsWrap.innerHTML = '';
@@ -425,10 +429,9 @@
 
     fillHistoryList($('resultHistoryList'), summary.history);
 
-    renderComparison(summary);
-    wireResultActions(summary);
-
-    showScreen('result');
+    // المقارنة والمشاركة إضافات — لا يُسمح لخطأ فيها بإخفاء النتيجة
+    try { renderComparison(summary); } catch (e) { console.error(e); }
+    try { wireResultActions(summary); } catch (e) { console.error(e); }
   }
 
   function renderComparison(summary) {
@@ -476,8 +479,21 @@
   }
 
   function wireResultActions(summary) {
-    var url = Share.buildResultLink(summary);
-    var text = Share.resultShareText(summary);
+    // أزرار التنقّل الأساسية تتسلك الأول — لازم تشتغل مهما حصل
+    $('playAgainBtn').onclick = function () { Sound.click(); startChallenge(summary.challengeId); };
+    $('resultHomeBtn').onclick = function () { Sound.click(); goHome(); };
+    $('downloadCardBtn').onclick = function () { shareCardImage(summary); };
+
+    // روابط المشاركة (مع بديل آمن لو حصلت أي مشكلة في الترميز)
+    var url, text;
+    try {
+      url = Share.buildResultLink(summary);
+      text = Share.resultShareText(summary);
+    } catch (e) {
+      console.error(e);
+      url = Share.buildGameLink(summary.challengeId);
+      text = Share.gameShareText(Engine.getChallenge(summary.challengeId));
+    }
 
     $('waShareBtn').href = Share.whatsappLink(url, text);
     $('tgShareBtn').href = Share.telegramLink(url, text);
@@ -492,9 +508,6 @@
         toast(ok ? '✅ اتنسخ رابط اللعبة بنتيجتك... ابعته لأصحابك!' : '⚠️ النسخ ما نجحش على المتصفح ده.');
       });
     };
-    $('downloadCardBtn').onclick = function () { shareCardImage(summary); };
-    $('playAgainBtn').onclick = function () { Sound.click(); startChallenge(summary.challengeId); };
-    $('resultHomeBtn').onclick = function () { Sound.click(); goHome(); };
   }
 
   function shareCardImage(summary) {
@@ -558,7 +571,7 @@
   function init() {
     initSound();
 
-    // membaca رابط الوصول (?c و ?r)
+    // قراءة بارامترات رابط الوصول (?c=التحدي و ?r=نتيجة صديق)
     var incoming = Share.parseIncoming();
     if (incoming.friendResult && Engine.getChallenge(incoming.friendResult.challengeId)) {
       state.friendResult = incoming.friendResult;

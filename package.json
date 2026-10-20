@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/validate-story.js"
+    "test": "node tests/validate-story.js",
+    "test:e2e": "node tests/e2e-dom.js"
   }
 }

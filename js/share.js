@@ -10,10 +10,16 @@
 (function (global) {
   'use strict';
 
-  /* ---------- ترميز/فك ترميز آمن للرابط ويدعم العربية ---------- */
+  /* ---------- ترميز/فك ترميز آمن للرابط ويدعم العربية ----------
+     مهم: بنستخدم TextEncoder + btoa (معايير ويب تعمل في المتصفح
+     وفي Node معًا). لا تستخدم Buffer هنا أبدًا — Buffer موجودة
+     في Node بس، واستخدامها هيكسّر المشاركة على الموبايل/المتصفح. */
   function encodePayload(obj) {
     var json = JSON.stringify(obj);
-    var b64 = Buffer.from(json, 'utf8').toString('base64');
+    var bytes = new TextEncoder().encode(json);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    var b64 = btoa(bin);
     return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
@@ -21,7 +27,10 @@
     try {
       var b64 = String(str || '').replace(/-/g, '+').replace(/_/g, '/');
       while (b64.length % 4) b64 += '=';
-      var json = Buffer.from(b64, 'base64').toString('utf8');
+      var bin = atob(b64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var json = new TextDecoder().decode(bytes);
       return JSON.parse(json);
     } catch (e) { return null; }
   }
@@ -29,7 +38,9 @@
   /* ---------- بناء الروابط ---------- */
   function baseUrl() {
     if (typeof location === 'undefined') return '';
-    return location.origin + location.pathname;
+    // عند فتح الملف مباشرة (file://) تكون origin قيمتها 'null' — نتعامل معاها
+    if (location.origin && location.origin !== 'null') return location.origin + location.pathname;
+    return location.href.split(/[?#]/)[0];
   }
 
   function buildGameLink(challengeId) {
@@ -153,6 +164,7 @@
     var W = 1080, H = 1350;
     canvas.width = W; canvas.height = H;
     var ctx = canvas.getContext('2d');
+    if (!ctx) return canvas; // بيئة من غير كانفس: ما نكسّرش أي حاجة
 
     // خلفية متدرجة داكنة
     var bg = ctx.createLinearGradient(0, 0, W, H);
@@ -229,7 +241,7 @@
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.font = '800 44px Cairo, Tahoma, sans-serif';
-      ctx.fillText(String(val), barX + barW + 55, y + 16);
+      ctx.fillText(String(val), barX - 55, y + 16); // يسار الشريط — عشان ما يزحمش اسم القيمة
       y += 92;
     });
 
