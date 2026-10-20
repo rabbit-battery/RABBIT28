@@ -1,0 +1,15 @@
+{
+  "name": "LOOP — اختياراتك بتحكي قصتك",
+  "short_name": "LOOP",
+  "description": "لعبة قرارات تفاعلية عربية — قرار واحد ممكن يغيّر كل حاجة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0a0714",
+  "theme_color": "#0a0714",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
