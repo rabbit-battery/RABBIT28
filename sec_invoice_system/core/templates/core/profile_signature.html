@@ -9,6 +9,10 @@
     <div class="alert alert-info">
         لديك صورة توقيع مرفوعة مسبقاً. رفع صورة جديدة يحل محلها، ويبقى التوقيع القديم محفوظاً
         داخل الأحداث التي وُقّعت به.
+        <div style="margin-top:8px;padding:8px;background:#fff;border:1px solid #ddd;display:inline-block">
+            <img src="data:image/png;base64,{{ signature_b64 }}" alt="صورة التوقيع الحالية"
+                 style="max-height:80px;max-width:240px">
+        </div>
     </div>
     {% endif %}
 

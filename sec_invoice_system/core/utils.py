@@ -92,14 +92,11 @@ def create_statement_event(statement, event_type, user, details=''):
     """إنشاء حدث في سجل المستخلص مع لقطة من توقيع المنفذ"""
     from .models import StatementEvent
 
+    # اللقطة تُقرأ من قاعدة البيانات لا من القرص: النشر serverless بلا قرص
+    # دائم، ولأن البصمة يجب أن تحمل الصورة نفسها التي وُقّع بها الإجراء.
     signature_b64 = ''
     try:
-        profile = user.profile
-        if profile.signature_image:
-            sig_path = os.path.join(settings.PRIVATE_MEDIA_ROOT, profile.signature_image)
-            if os.path.exists(sig_path):
-                with open(sig_path, 'rb') as f:
-                    signature_b64 = base64.b64encode(f.read()).decode('utf-8')
+        signature_b64 = user.profile.signature_data or ''
     except Exception:  # noqa: BLE001 - غياب التوقيع لا يجب أن يوقف الإجراء
         pass
 
@@ -136,11 +133,16 @@ def verify_event_chain(statement):
 
 
 def process_signature_upload(uploaded_file, user):
-    """معالجة صورة التوقيع وحفظها بأمان"""
+    """
+    معالجة صورة التوقيع وحفظها بأمان.
+
+    تُعاد معالجتها بالكامل (لا يُخزَّن الملف المرفوع كما هو) لإسقاط أي
+    بيانات مخفية مثل Exif أو نصوص مضمّنة، ثم تُخزَّن PNG في قاعدة البيانات.
+    التخزين في القاعدة لا على القرص لأن النشر serverless بلا قرص دائم.
+    """
     if uploaded_file.size > settings.MAX_SIGNATURE_SIZE_MB * 1024 * 1024:
         raise ValueError(f'حجم الصورة يتجاوز {settings.MAX_SIGNATURE_SIZE_MB} ميغابايت')
 
-    # إعادة المعالجة لإزالة أي بيانات مخفية (Exif / نصوص مضمّنة)
     img = Image.open(uploaded_file)
     if img.format not in ('PNG', 'JPEG', 'JPG'):
         raise ValueError('صيغة الصورة غير مدعومة. استخدم PNG أو JPEG')
@@ -148,29 +150,18 @@ def process_signature_upload(uploaded_file, user):
     clean_img = Image.new('RGBA', img.size, (255, 255, 255, 0))
     clean_img.paste(img)
 
-    filename = f"{uuid.uuid4().hex}.png"
-    sig_dir = os.path.join(settings.PRIVATE_MEDIA_ROOT, 'signatures')
-    os.makedirs(sig_dir, exist_ok=True)
-    filepath = os.path.join(sig_dir, filename)
-
     buffer = io.BytesIO()
     clean_img.save(buffer, format='PNG')
-    with open(filepath, 'wb') as f:
-        f.write(buffer.getvalue())
+    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
 
-    # حذف الصورة القديمة
-    try:
-        if user.profile.signature_image:
-            old_path = os.path.join(settings.PRIVATE_MEDIA_ROOT, user.profile.signature_image)
-            if os.path.exists(old_path):
-                os.remove(old_path)
-    except Exception:  # noqa: BLE001
-        pass
+    # حد أعلى حتى لا تتضخّم قاعدة البيانات بصورة كبيرة
+    if len(encoded) > settings.MAX_SIGNATURE_BASE64_CHARS:
+        raise ValueError('الصورة كبيرة جداً بعد المعالجة. استخدم صورة أصغر')
 
-    relative_path = f"signatures/{filename}"
-    user.profile.signature_image = relative_path
+    user.profile.signature_data = encoded
+    user.profile.signature_image = f"signature_{uuid.uuid4().hex[:8]}.png"
     user.profile.save()
-    return relative_path
+    return user.profile.signature_image
 
 
 def sanitize_excel_value(value):

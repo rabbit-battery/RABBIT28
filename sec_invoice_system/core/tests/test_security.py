@@ -216,39 +216,33 @@ class SignatureUploadTests(TestCase):
         self.user.profile.refresh_from_db()
         return self.user.profile.signature_image
 
+    def stored_data(self):
+        self.user.profile.refresh_from_db()
+        return self.user.profile.signature_data
+
     def test_valid_png_is_saved_and_recorded(self):
         response = self.upload(self.png())
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(self.stored_path().startswith('signatures/'))
+        self.assertTrue(self.stored_data(), 'يجب تخزين صورة التوقيع في قاعدة البيانات')
 
-        from django.conf import settings
-        import os
-        path = os.path.join(settings.PRIVATE_MEDIA_ROOT, self.stored_path())
-        self.assertTrue(os.path.exists(path))
-
-        # الصورة تُعاد معالجتها فيجب أن تبقى PNG صالحة
+        # الصورة تُعاد معالجتها فيجب أن تبقى PNG صالحة بعد فك الترميز
+        import base64
         from PIL import Image
-        with Image.open(path) as img:
+        import io
+        with Image.open(io.BytesIO(base64.b64decode(self.stored_data()))) as img:
             self.assertEqual(img.format, 'PNG')
-        os.remove(path)
 
-    def test_reupload_replaces_the_old_file(self):
-        from django.conf import settings
-        import os
-
-        self.upload(self.png())
-        first = self.stored_path()
+    def test_reupload_replaces_the_old_data(self):
+        self.upload(self.png(width=4))
+        first = self.stored_data()
         self.assertTrue(first)
 
-        self.upload(self.png())
-        second = self.stored_path()
+        self.upload(self.png(width=6))
+        second = self.stored_data()
 
-        self.assertNotEqual(first, second)
-        self.assertFalse(
-            os.path.exists(os.path.join(settings.PRIVATE_MEDIA_ROOT, first)),
-            'الملف القديم يجب أن يُحذف'
-        )
-        os.remove(os.path.join(settings.PRIVATE_MEDIA_ROOT, second))
+        self.assertTrue(second)
+        self.assertNotEqual(first, second, 'الرفع الجديد يجب أن يستبدل الصورة السابقة')
+        self.assertNotEqual(self.stored_path(), '')
 
     def test_non_image_is_rejected_by_the_form(self):
         response = self.upload(b'\x89PNG fake content', name='evil.png')

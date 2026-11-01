@@ -185,11 +185,14 @@ def signature_upload(request):
         form = SignatureUploadForm()
 
     has_signature = False
+    signature_b64 = ''
     try:
-        has_signature = bool(request.user.profile.signature_image)
+        signature_b64 = request.user.profile.signature_data or ''
+        has_signature = bool(signature_b64)
     except Exception:  # noqa: BLE001
         pass
 
     return render(request, 'core/profile_signature.html', {
-        'form': form, 'has_signature': has_signature
+        'form': form, 'has_signature': has_signature,
+        'signature_b64': signature_b64,
     })

@@ -18,6 +18,19 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# ──────────── النشر على Vercel ────────────
+# Vercel يعطي كل نشر نطاقاً فريداً (project-branch-hash.vercel.app) لا يمكن
+# معرفته مسبقاً، فنتبنّى نطاق *.vercel.app كاملاً. هذا مقبول هنا لأن كل
+# نطاقات vercel.app تُخدم عبر HTTPS إلزامياً ولا يمكن لمهاجم انتحال نطاق
+# فرعي لنا. عند النشر الداخلي النهائي تُضبط القيمتان صراحةً عبر متغيرات
+# البيئة وتُحذف هذه الفقرة.
+if os.environ.get('VERCEL'):
+    if '.vercel.app' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('.vercel.app')
+    for _origin in ('https://*.vercel.app',):
+        if _origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_origin)
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -34,6 +47,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # يخدم الملفات الثابتة مباشرة في النشر serverless (Vercel) حيث لا يوجد
+    # nginx. في نشر Docker يمرّ nginx أولاً فلا يتأثر الأداء.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -73,7 +89,34 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ──────────── قاعدة البيانات ────────────
-if os.environ.get('DATABASE_URL'):
+def _parse_database_url(url):
+    """
+    تحليل DATABASE_URL إلى مكونات Django.
+
+    مكتوبة يدوياً بدل إضافة حزمة dj-database-url: الصيغة محدودة ومعروفة،
+    وتجنّب الحزمة يبقي سلسلة التوريد أصغر في نظام مالي.
+    """
+    from urllib.parse import urlparse, unquote
+    parsed = urlparse(url)
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': (parsed.path or '/').lstrip('/'),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or '',
+        'PORT': str(parsed.port or 5432),
+        # الاتصالات serverless قصيرة العمر؛ عدم إبقائها يمنع استنفاد
+        # اتصالات قاعدة البيانات عند توسّع عدد النسخ.
+        'CONN_MAX_AGE': 0,
+        'OPTIONS': {'connect_timeout': 10},
+    }
+
+
+_database_url = os.environ.get('DATABASE_URL')
+
+if _database_url:
+    DATABASES = {'default': _parse_database_url(_database_url)}
+elif os.environ.get('DB_HOST'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -123,8 +166,32 @@ LOGOUT_REDIRECT_URL = 'login'
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-PRIVATE_MEDIA_ROOT = BASE_DIR / 'private_media'
+
+# المسارات قابلة للتحديد بمتغيرات بيئة: النشر serverless (Vercel) قرصُه
+# للقراءة فقط عدا /tmp، فيُوجَّه الرفع إليه. (الصور الموقّعة محفوظة في قاعدة
+# البيانات فلا تتأثر؛ هذا خاص بمرفقات العقود المؤقتة.)
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT',
+                                         BASE_DIR / 'private_media'))
+
+# WhiteNoise يخدم الملفات الثابتة ويضغطها ويخزّنها بأسماء مُجزّأة (hashed)
+# لتمكين التخزين المؤقت الدائم في المتصفح.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        # الإنتاج: أسماء مُجزّأة (hashed) + ضغط، فتُمكَّن الكاش الدائم في
+        # المتصفح. يتطلب collectstatic قبل التشغيل.
+        # التطوير/الاختبارات: التخزين العادي، لأنManifestStaticFilesStorage
+        # يرفع ValueError لأي ملف غير موجود في staticfiles.json.
+        'BACKEND': (
+            'whitenoise.storage.CompressedManifestStaticFilesStorage'
+            if not DEBUG else
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+        ),
+    },
+}
+WHITENOISE_ALLOW_ALL_ORIGINS = False
+WHITENOISE_MAX_AGE = 31536000  # سنة
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -184,3 +251,5 @@ MAX_UPLOAD_SIZE_MB = 20
 MAX_EXCEL_SIZE_MB = 5
 MAX_EXCEL_ROWS = 5000
 MAX_SIGNATURE_SIZE_MB = 1
+# الحد الأعلى لحجم التوقيع بعد معالجته وترميزه base64 (≈ 750KB صورة أصلية)
+MAX_SIGNATURE_BASE64_CHARS = 1_000_000

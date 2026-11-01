@@ -146,19 +146,10 @@ class PdfHtmlTests(ExportBase):
                          reverse('statement_detail', args=[self.stmt.pk]))
 
     def test_signature_is_embedded_as_data_uri(self):
-        import base64
-        from django.conf import settings
-        import os
-
-        sig_dir = os.path.join(settings.PRIVATE_MEDIA_ROOT, 'signatures')
-        os.makedirs(sig_dir, exist_ok=True)
-        png_bytes = base64.b64decode(
-            b'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='
+        # التوقيع مخزّن في قاعدة البيانات (لا على القرص) لأن النشر serverless
+        self.accountant.profile.signature_data = (
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='
         )
-        with open(os.path.join(sig_dir, 'testsig.png'), 'wb') as f:
-            f.write(png_bytes)
-
-        self.accountant.profile.signature_image = 'signatures/testsig.png'
         self.accountant.profile.save()
 
         from core.utils import create_statement_event
@@ -167,5 +158,3 @@ class PdfHtmlTests(ExportBase):
         event = self.stmt.events.filter(event_type='edited').first()
         self.assertTrue(event.signature_snapshot.startswith('iVBORw0KGgo'))
         self.assertIn('data:image/png;base64,iVBORw0KGgo', build_statement_pdf_html(self.stmt))
-
-        os.remove(os.path.join(sig_dir, 'testsig.png'))

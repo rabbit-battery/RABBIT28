@@ -37,6 +37,10 @@ class UserProfile(models.Model):
     signature_image = models.CharField(
         'مسار صورة التوقيع', max_length=255, blank=True
     )
+    # صورة التوقيع مُخزّنة في قاعدة البيانات لا على القرص: النشر serverless
+    # (Vercel) بلا قرص دائم، ولأن البصمة الرقمية للحدث تحتاج الصورة نفسها
+    # التي وُقّع بها لحظة الإجراء — لا نسخة قد تُستبدل لاحقاً.
+    signature_data = models.TextField('صورة التوقيع (base64)', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
