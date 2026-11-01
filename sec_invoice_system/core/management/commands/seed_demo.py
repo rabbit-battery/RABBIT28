@@ -25,7 +25,7 @@ from django.utils import timezone
 
 from core.models import (
     UserProfile, Contract, PriceItem, Technician, Holiday, Task,
-    Statement, StatementLine
+    Statement, StatementLine, AuditLog
 )
 from core.utils import create_statement_event, vat_rate_factor
 from core.arabic_amount import amount_to_arabic
@@ -104,6 +104,11 @@ class Command(BaseCommand):
             Contract.objects.all().delete()
             Technician.objects.all().delete()
             Holiday.objects.all().delete()
+            # سجل التدقيق يرتبط بالمستخدم بـ PROTECT عن قصد: سجل التدقيق لا يجوز
+            # أن يفقد صاحبه. لذلك يُمسح صراحةً قبل حذف الحسابات، وإلا فشل
+            # الأمر بـ ProtectedError. مقبول هنا لأن --wipe إعادة ضبط كاملة
+            # لبيئة تجريبية، لا إجراءً على بيانات إنتاج.
+            AuditLog.objects.all().delete()
             User.objects.filter(is_superuser=False).delete()
 
         today = timezone.localdate()
@@ -140,6 +145,28 @@ class Command(BaseCommand):
             self.stdout.write(
                 f'  + مستخلص {older.statement_number} = {older.total_with_vat} ر.س '
                 f'({older.get_status_display()})'
+            )
+
+        # ── ثلاثة أشهر سابقة: مستخلص معتمد ──
+        # كل حالة من حالات دورة العمل ممثَّلة بمستخلص، فيمكن تجربة كل إجراء
+        # على مستخلص جاهز بدل انتظار شهر كامل:
+        #   مسودة → branch يراجعها | reviewed → approver يعتمد |
+        #   approved → accountant يصرف | paid → للاطلاع والتتبع.
+        approved = self._seed_month(contract, items, techs, users, rng,
+                                    offset=-3, stop_at='approved')
+        if approved:
+            self.stdout.write(
+                f'  + مستخلص {approved.statement_number} = {approved.total_with_vat} ر.س '
+                f'({approved.get_status_display()})'
+            )
+
+        # ── أربعة أشهر سابقة: مستخلص مسودة ──
+        draft = self._seed_month(contract, items, techs, users, rng,
+                                 offset=-4, stop_at='draft')
+        if draft:
+            self.stdout.write(
+                f'  + مستخلص {draft.statement_number} = {draft.total_with_vat} ر.س '
+                f'({draft.get_status_display()})'
             )
 
         self.stdout.write(self.style.SUCCESS(
