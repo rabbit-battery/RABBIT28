@@ -554,6 +554,33 @@ def verify_2fa(request):
     })
 
 
+def health_check(request):
+    """
+    نقطة فحص صحي: تقوم بجولة فعلية على قاعدة البيانات.
+
+    بلا مصادقة لأن مُنسّق الحاويات (Docker HEALTHCHECK / Kubernetes probes)
+    يستدعيها قبل توفر أي جلسة. لا تكشف أي معلومة حساسة: حالة فقط.
+
+    الفرق عن فحص صفحة الدخول: صفحة الدخول تُرسم دون لمس قاعدة البيانات،
+    فنجاة التطبيق لا تعني اتصاله بها. هذه النقطة تنفّذ استعلاماً حقيقياً
+    فتُظهر فشل الاتصال أو الترحيلات الناقصة بدل أن يمرّ الفحص كاذباً.
+    """
+    from django.db import connection
+
+    payload = {'status': 'ok', 'database': 'ok'}
+    status_code = 200
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except Exception:  # noqa: BLE001 - أي فشل اتصال يُبلَّغ كحالة لا كاستثناء
+        logger.critical('فحص الصحة: تعذّر الاتصال بقاعدة البيانات', exc_info=True)
+        payload = {'status': 'error', 'database': 'unavailable'}
+        status_code = 503
+
+    return JsonResponse(payload, status=status_code)
+
+
 def _issue_backup_codes(user, count=8):
     """إنشاء رموز احتياطية تُستخدم مرة واحدة"""
     static_device, _ = StaticDevice.objects.get_or_create(user=user, name='backup')

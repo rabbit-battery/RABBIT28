@@ -2,7 +2,7 @@
 
 import time
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django_otp.oath import TOTP
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -301,3 +301,61 @@ class SessionAndHeaderTests(TestCase):
         # لا يوجد مسار /media/ في urlpatterns، فالملفات الخاصة غير قابلة للتحميل عبر الويب
         self.assertEqual(self.client.get('/media/signatures/x.png').status_code, 404)
         self.assertEqual(self.client.get('/private_media/signatures/x.png').status_code, 404)
+
+
+class HealthCheckTests(TestCase):
+    """نقطة الفحص الصحي: يجب أن تُثبت اتصال التطبيق بقاعدة البيانات فعلاً"""
+
+    def test_health_ok_without_authentication(self):
+        """بلا مصادقة، لأن مُنسّق الحاويات يستدعيها قبل أي جلسة"""
+        response = self.client.get('/health/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertEqual(data['database'], 'ok')
+
+    def test_health_reports_database_failure_as_503(self):
+        """انقطاع القاعدة يجب أن يظهر كحالة 503 لا كاستجابة 200 كاذبة"""
+        from unittest import mock
+
+        # الواجهة تستورد connection داخل الدالة، لذا نُرقّع الأصل في django.db
+        with mock.patch('django.db.connection.cursor',
+                        side_effect=Exception('connection refused')):
+            response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 503)
+        data = response.json()
+        self.assertEqual(data['status'], 'error')
+        self.assertEqual(data['database'], 'unavailable')
+
+    @override_settings(SECURE_SSL_REDIRECT=True,
+                       SECURE_REDIRECT_EXEMPT=[r'^health/$'])
+    def test_health_is_not_redirected_to_https(self):
+        """
+        HEALTHCHECK في Dockerfile يستدعي gunicorn على http://127.0.0.1:8000
+        مباشرة دون ترويسة X-Forwarded-Proto. لو حُوِّل إلى HTTPS لفشل الفحص
+        دائماً وتُعلَّم الحاوية غير سليمة.
+        """
+        response = self.client.get('/health/')
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(SECURE_SSL_REDIRECT=True,
+                       SECURE_REDIRECT_EXEMPT=[r'^health/$'])
+    def test_other_paths_still_redirect_to_https(self):
+        """الإعفاء محصور بالفحص الصحي ولا يُضعف إعادة التوجيه لبقية المسارات"""
+        response = self.client.get('/login/')
+        self.assertEqual(response.status_code, 301)
+        self.assertTrue(response['Location'].startswith('https://'))
+
+    def test_health_leaks_no_sensitive_information(self):
+        """لا تكشف اسم القاعدة أو المضيف أو أي تفصيل داخلي"""
+        from django.conf import settings
+
+        body = self.client.get('/health/').content.decode()
+        self.assertEqual(body, '{"status": "ok", "database": "ok"}')
+        # assertNotIn('') ينجح دائماً، لذا نتحقق فقط من وجود قيمة فعلية
+        host = settings.DATABASES['default'].get('HOST') or ''
+        name = settings.DATABASES['default'].get('NAME') or ''
+        for secret in (host, name):
+            if secret:
+                self.assertNotIn(secret, body)

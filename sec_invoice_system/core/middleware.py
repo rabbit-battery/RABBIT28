@@ -9,6 +9,7 @@ class ForcePasswordChangeMiddleware:
         '/logout/',
         '/static/',
         '/secure-admin-x7k/',
+        '/health/',
     ]
 
     def __init__(self, get_response):
@@ -38,6 +39,7 @@ class Force2FAMiddleware:
         '/password/change/',
         '/static/',
         '/secure-admin-x7k/',
+        '/health/',
     ]
 
     def __init__(self, get_response):

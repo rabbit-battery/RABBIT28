@@ -225,6 +225,11 @@ if not DEBUG:
     # الطلب HTTP فتعيد توجيهه إلى HTTPS في حلقة لا تنتهي.
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     USE_X_FORWARDED_HOST = True
+    # HEALTHCHECK في Dockerfile يستدعي gunicorn على http://127.0.0.1:8000
+    # مباشرة دون nginx، فلا تصله ترويسة X-Forwarded-Proto. ومع ضبط
+    # SECURE_PROXY_SSL_HEADER أعلاه تتجاهل Django مخطط الاتصال وتعتمد
+    # الترويسة وحدها، فيرجع الفحص 301 دائماً وتُعلَّم الحاوية غير سليمة.
+    SECURE_REDIRECT_EXEMPT = [r'^health/$']
 
 SESSION_COOKIE_AGE = 1800  # 30 دقيقة
 SESSION_SAVE_EVERY_REQUEST = True

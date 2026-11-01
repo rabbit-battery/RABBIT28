@@ -9,6 +9,7 @@ urlpatterns = [
         template_name='core/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('password/change/', views.password_change_view, name='password_change'),
+    path('health/', views.health_check, name='health_check'),
 
     # لوحة المتابعة
     path('', views.dashboard, name='dashboard'),

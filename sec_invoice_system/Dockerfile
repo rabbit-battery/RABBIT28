@@ -43,8 +43,10 @@ USER appuser
 
 EXPOSE 8000
 
+# /health/ تنفّذ استعلاماً حقيقياً على قاعدة البيانات، فتُظهر فشل الاتصال
+# بدل أن يمرّ الفحص كاذباً كما كان يحدث مع /login/ التي تُرسم دون لمس القاعدة.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/login/', timeout=4).status == 200 else 1)"
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=4).status == 200 else 1)"
 
 CMD ["gunicorn", "config.wsgi:application", \
      "--bind", "0.0.0.0:8000", \
