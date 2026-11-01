@@ -174,21 +174,25 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
 PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT',
                                          BASE_DIR / 'private_media'))
 
-# WhiteNoise يخدم الملفات الثابتة ويضغطها ويخزّنها بأسماء مُجزّأة (hashed)
-# لتمكين التخزين المؤقت الدائم في المتصفح.
+# WhiteNoise يخدم الملفات الثابتة. خلفية الملفات الثابتة قابلة للتحديد
+# بمتغير بيئة DJANGO_STATIC_STORAGE لأن المعالجة اللاحقة (ضغط gzip/brotli +
+# تجزئة الأسماء) تحتاج كتابة ملفات وسيطة، وقد لا تتوفر في كل بيئات البناء.
+#
+# الافتراضي:
+#   - الإنتاج (nginx/Docker): CompressedManifestStaticFilesStorage
+#     → كاش دائم في المتصفح لأن الأسماء تتغير مع المحتوى.
+#   - التطوير/الاختبارات: StaticFilesStorage
+#     → ManifestStaticFilesStorage يرفع ValueError لأي مرجع غير موجود في
+#       staticfiles.json، فيُفشل الاختبارات.
+STATICFILES_BACKEND = os.environ.get(
+    'DJANGO_STATIC_STORAGE',
+    'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG
+    else 'django.contrib.staticfiles.storage.StaticFilesStorage',
+)
+
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    'staticfiles': {
-        # الإنتاج: أسماء مُجزّأة (hashed) + ضغط، فتُمكَّن الكاش الدائم في
-        # المتصفح. يتطلب collectstatic قبل التشغيل.
-        # التطوير/الاختبارات: التخزين العادي، لأنManifestStaticFilesStorage
-        # يرفع ValueError لأي ملف غير موجود في staticfiles.json.
-        'BACKEND': (
-            'whitenoise.storage.CompressedManifestStaticFilesStorage'
-            if not DEBUG else
-            'django.contrib.staticfiles.storage.StaticFilesStorage'
-        ),
-    },
+    'staticfiles': {'BACKEND': STATICFILES_BACKEND},
 }
 WHITENOISE_ALLOW_ALL_ORIGINS = False
 WHITENOISE_MAX_AGE = 31536000  # سنة
