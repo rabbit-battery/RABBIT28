@@ -150,6 +150,12 @@ docker compose exec web python manage.py createsuperuser
 
 ## النشر على Vercel (تجريبي)
 
+**الرابط الحيّ:** <https://sec-invoice-system.vercel.app>
+
+قاعدة البيانات: Supabase Postgres (مشروع `west-qassim-electric`)، مستخدم مخصص
+`sec_app` بصلاحيات محدودة على مخطط `public`. الترحيلات والبذر ينفّذان تلقائياً
+أثناء كل بناء، فلا حاجة لأي خطوة يدوية.
+
 ملفات النشر:
 
 | الملف | الوظيفة |
