@@ -1,0 +1,13 @@
+Django>=5.1,<5.2
+psycopg[binary]>=3.1
+django-axes>=6.4
+# الإصدار 4 من django-csp تجاهل الإعدادات القديمة (CSP_DEFAULT_SRC ...)
+django-csp>=3.8,<4
+django-otp>=1.3
+qrcode[pil]>=7.4
+Pillow>=10.3
+openpyxl>=3.1
+whitenoise>=6.6
+# WeasyPrint مستثنى عمداً: يحتاج مكتبات نظام (libpango) غير متوفرة في بيئة
+# Vercel serverless. تصدير PDF يعتذر برسالة عربية واضحة بدل أن ينكسر، وبقية
+# النظام يعمل كاملاً. في نشر Docker الداخلي تُستخدم requirements.txt الكاملة.

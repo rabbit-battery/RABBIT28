@@ -1,0 +1,62 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}مقارنة شهرية{% endblock %}
+
+{% block content %}
+<div class="compare-page">
+    <h1>مقارنة شهرية - {{ year }}</h1>
+
+    <div class="filter-bar">
+        <form method="get" class="inline-form">
+            <select name="year" class="form-control">
+                {% for y in years %}
+                <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <select name="contract" class="form-control">
+                <option value="">جميع العقود</option>
+                {% for c in contracts %}
+                <option value="{{ c.pk }}" {% if selected_contract == c.pk|stringformat:"d" %}selected{% endif %}>
+                    {{ c.contract_number }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">عرض</button>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>الشهر</th>
+                    <th>الإجمالي (قبل الضريبة)</th>
+                    <th>نسبة التغيّر</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in months_data %}
+                <tr>
+                    <td>{{ m.month_name }} ({{ m.month }})</td>
+                    <td>{{ m.total|currency }}</td>
+                    <td>
+                        {% if m.change is None %}
+                        —
+                        {% elif m.change > 0 %}
+                        <span class="text-danger">↑ {{ m.change }}%</span>
+                        {% elif m.change < 0 %}
+                        <span class="text-success">↓ {{ m.change }}%</span>
+                        {% else %}
+                        <span>— 0%</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="help-text">
+        نسبة التغيّر تُحسب مقارنة بالشهر السابق ولا تُعرض لأول شهر أو عندما يكون الشهر السابق صفراً.
+    </p>
+</div>
+{% endblock %}

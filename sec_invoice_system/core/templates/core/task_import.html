@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+{% block title %}استيراد المهام{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1>استيراد مهام من Excel</h1>
+
+    <div class="info-box">
+        <h3>تنسيق الملف المطلوب:</h3>
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>العمود A</th>
+                    <th>العمود B</th>
+                    <th>العمود C</th>
+                    <th>العمود D</th>
+                    <th>العمود E</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>رقم الفني</td>
+                    <td>كود البند</td>
+                    <td>التاريخ</td>
+                    <td>الكمية</td>
+                    <td>الموقع (اختياري)</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>الحد الأقصى: 5 ميغابايت و5000 سطر. السطر الأول (العناوين) يُتجاهل.</p>
+        <p>التاريخ يقبل الصيغ: <code>2025-06-01</code> أو <code>01/06/2025</code> أو خلية تاريخ من Excel.</p>
+        <p>الاستيراد «كل شيء أو لا شيء»: أي سطر خاطئ يوقف العملية كاملة.</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="styled-form">
+        {% csrf_token %}
+
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}
+            <small class="help-text">{{ field.help_text }}</small>
+            {% endif %}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">استيراد</button>
+    </form>
+</div>
+{% endblock %}

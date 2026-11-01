@@ -1,0 +1,239 @@
+{% load core_tags %}<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>مستخلص {{ statement.statement_number }}</title>
+<style>
+    @page {
+        size: A4;
+        margin: 18mm 15mm 20mm 15mm;
+        @bottom-center {
+            content: "صفحة " counter(page) " من " counter(pages);
+            font-family: 'Amiri', 'Noto Naskh Arabic', 'DejaVu Sans', serif;
+            font-size: 9pt;
+            color: #666;
+        }
+    }
+    body {
+        font-family: 'Amiri', 'Noto Naskh Arabic', 'DejaVu Sans', serif;
+        font-size: 11pt;
+        color: #222;
+        direction: rtl;
+    }
+    .doc-header {
+        text-align: center;
+        border-bottom: 3px double #1a5276;
+        padding-bottom: 8px;
+        margin-bottom: 14px;
+    }
+    .doc-header .org { font-size: 13pt; font-weight: bold; color: #1a5276; }
+    .doc-header .sys { font-size: 10pt; color: #555; }
+    .doc-header h1 { font-size: 15pt; margin: 6px 0 0; }
+    .draft-stamp {
+        color: #b03a2e;
+        font-size: 12pt;
+        font-weight: bold;
+        border: 2px solid #b03a2e;
+        display: inline-block;
+        padding: 2px 10px;
+        margin-top: 6px;
+    }
+    table.meta {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 12px;
+        font-size: 10.5pt;
+    }
+    table.meta td {
+        border: 1px solid #ccc;
+        padding: 5px 8px;
+    }
+    table.meta td.label {
+        background: #eef3f8;
+        font-weight: bold;
+        width: 18%;
+    }
+    table.lines {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10pt;
+    }
+    table.lines th {
+        background: #1a5276;
+        color: #fff;
+        padding: 6px;
+        border: 1px solid #1a5276;
+        text-align: right;
+    }
+    table.lines td {
+        border: 1px solid #ddd;
+        padding: 5px 6px;
+    }
+    table.lines td.num { text-align: left; white-space: nowrap; }
+    tr.total td { background: #f4f6f7; font-weight: bold; }
+    tr.grand td { background: #eaf2f8; font-weight: bold; font-size: 11pt; color: #1a5276; }
+    .words {
+        margin: 12px 0;
+        padding: 8px 10px;
+        background: #fef9e7;
+        border-right: 4px solid #f39c12;
+        font-size: 11pt;
+    }
+    .notes { margin: 10px 0; padding: 8px 10px; background: #f8f9fa; }
+    h2 { font-size: 12pt; margin: 16px 0 6px; color: #1a5276; }
+    .chain-ok { color: #1e8449; font-weight: bold; }
+    .chain-bad { color: #c0392b; font-weight: bold; }
+    table.events {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9.5pt;
+    }
+    table.events th, table.events td {
+        border: 1px solid #ddd;
+        padding: 5px;
+        text-align: right;
+        vertical-align: top;
+    }
+    table.events th { background: #f4f6f7; }
+    .sig { max-height: 46px; max-width: 150px; }
+    .footer-note {
+        margin-top: 16px;
+        font-size: 8.5pt;
+        color: #777;
+        border-top: 1px solid #ddd;
+        padding-top: 6px;
+    }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+    <div class="org">الشركة السعودية للكهرباء</div>
+    <div class="sys">نظام مستخلصات العقد الموحد</div>
+    <h1>مستخلص رقم {{ statement.statement_number }}</h1>
+    {% if is_draft %}
+    <div class="draft-stamp">مسودة — غير معتمد</div>
+    {% endif %}
+</div>
+
+<table class="meta">
+    <tr>
+        <td class="label">العقد</td>
+        <td>{{ statement.contract }}</td>
+        <td class="label">الفترة</td>
+        <td>{{ statement.month }}/{{ statement.year }}</td>
+    </tr>
+    <tr>
+        <td class="label">الإصدار</td>
+        <td>{{ statement.revision }}</td>
+        <td class="label">الحالة</td>
+        <td>{{ statement.get_status_display }}</td>
+    </tr>
+    <tr>
+        <td class="label">أنشئ بواسطة</td>
+        <td>{{ statement.created_by.get_full_name|default:statement.created_by.username }}</td>
+        <td class="label">تاريخ الإنشاء</td>
+        <td>{{ statement.created_at|date:"d/m/Y H:i" }}</td>
+    </tr>
+    {% if statement.po_number %}
+    <tr>
+        <td class="label">رقم أمر الشراء</td>
+        <td>{{ statement.po_number }}</td>
+        <td class="label">تاريخ الصرف</td>
+        <td>{{ statement.paid_at|date:"d/m/Y H:i" }}</td>
+    </tr>
+    {% endif %}
+</table>
+
+<table class="lines">
+    <thead>
+        <tr>
+            <th style="width:4%">#</th>
+            <th style="width:12%">كود البند</th>
+            <th style="width:38%">الوصف</th>
+            <th style="width:10%">الوحدة</th>
+            <th style="width:12%">سعر الوحدة</th>
+            <th style="width:10%">الكمية</th>
+            <th style="width:14%">الإجمالي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in lines %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ line.item_code }}</td>
+            <td>{{ line.item_description }}</td>
+            <td>{{ line.unit }}</td>
+            <td class="num">{{ line.unit_price|currency }}</td>
+            <td class="num">{{ line.total_quantity }}</td>
+            <td class="num">{{ line.line_total|currency }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="total">
+            <td colspan="6">الإجمالي قبل الضريبة</td>
+            <td class="num">{{ statement.subtotal|currency }}</td>
+        </tr>
+        <tr class="total">
+            <td colspan="6">ضريبة القيمة المضافة ({{ vat_rate }}%)</td>
+            <td class="num">{{ statement.vat_amount|currency }}</td>
+        </tr>
+        <tr class="grand">
+            <td colspan="6">الإجمالي شامل الضريبة</td>
+            <td class="num">{{ statement.total_with_vat|currency }}</td>
+        </tr>
+    </tfoot>
+</table>
+
+<div class="words"><strong>المبلغ بالحروف:</strong> {{ statement.total_in_words }}</div>
+
+{% if statement.notes %}
+<div class="notes"><strong>ملاحظات:</strong> {{ statement.notes }}</div>
+{% endif %}
+
+<h2>سجل الأحداث والتوقيعات</h2>
+{% if chain_valid %}
+<p class="chain-ok">✓ سلسلة البصمات الرقمية سليمة — لم يُكتشف أي تلاعب بالسجل.</p>
+{% else %}
+<p class="chain-bad">⚠ تحذير: سلسلة البصمات الرقمية غير سليمة — يُحتمل وجود تعديل مباشر على قاعدة البيانات.</p>
+{% endif %}
+
+<table class="events">
+    <thead>
+        <tr>
+            <th style="width:12%">الإجراء</th>
+            <th style="width:22%">المنفذ</th>
+            <th style="width:16%">الدور</th>
+            <th style="width:16%">التاريخ والوقت</th>
+            <th style="width:18%">التفاصيل</th>
+            <th style="width:16%">التوقيع/الختم</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in events_with_sig %}
+        <tr>
+            <td>{{ row.event.get_event_type_display }}</td>
+            <td>{{ row.event.performed_by_name }}</td>
+            <td>{{ row.event.performed_by_role }}</td>
+            <td>{{ row.event.timestamp|date:"d/m/Y H:i:s" }}</td>
+            <td>{{ row.event.details }}</td>
+            <td>
+                {% if row.signature_b64 %}
+                <img class="sig" src="data:image/png;base64,{{ row.signature_b64 }}" alt="توقيع">
+                {% else %}—{% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">لا توجد أحداث مسجّلة</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="footer-note">
+    هذا المستخلص مولّد آلياً من نظام مستخلصات العقد الموحد. بصمة SHA-256 لكل حدث تربطه بالحدث السابق
+    لضمان عدم إمكانية التعديل أو الحذف دون كشف ذلك.
+</div>
+
+</body>
+</html>

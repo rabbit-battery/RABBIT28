@@ -1,0 +1,58 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}المستخلصات{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>المستخلصات</h1>
+    <div class="actions">
+        <a href="{% url 'statement_generate' %}" class="btn btn-primary">إنشاء مستخلص</a>
+        <a href="{% url 'statement_compare' %}" class="btn btn-secondary">مقارنة شهرية</a>
+        <a href="{% url 'statement_track' %}" class="btn btn-secondary">تتبع مستخلص</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>رقم المستخلص</th>
+                <th>العقد</th>
+                <th>الشهر/السنة</th>
+                <th>الإجمالي شامل الضريبة</th>
+                <th>الحالة</th>
+                <th>أنشئ بواسطة</th>
+                <th>التاريخ</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stmt in statements %}
+            <tr>
+                <td>
+                    <a href="{% url 'statement_detail' stmt.pk %}">{{ stmt.statement_number }}</a>
+                </td>
+                <td>{{ stmt.contract.contract_number }}</td>
+                <td>{{ stmt.month }}/{{ stmt.year }}</td>
+                <td>{{ stmt.total_with_vat|currency }}</td>
+                <td>
+                    <span class="badge badge-{{ stmt.status|status_badge }}">
+                        {{ stmt.status|status_arabic }}
+                    </span>
+                </td>
+                <td>{{ stmt.created_by.get_full_name|default:stmt.created_by.username }}</td>
+                <td>{{ stmt.created_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <a href="{% url 'statement_pdf' stmt.pk %}" class="btn btn-sm">PDF</a>
+                    <a href="{% url 'statement_xlsx' stmt.pk %}" class="btn btn-sm">Excel</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center">لا توجد مستخلصات</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}تتبع مستخلص{% endblock %}
+
+{% block content %}
+<div class="track-page">
+    <h1>تتبع مستخلص</h1>
+
+    <form method="post" class="search-form">
+        {% csrf_token %}
+        <div class="search-group">
+            <input type="text" name="statement_number"
+                   placeholder="أدخل رقم المستخلص (مثال: ST-202506-101)"
+                   class="form-control form-control-lg"
+                   value="{{ form.statement_number.value|default:'' }}"
+                   maxlength="40" required>
+            <button type="submit" class="btn btn-primary btn-lg">بحث</button>
+        </div>
+        {% if form.statement_number.errors %}
+        <div class="field-error">{{ form.statement_number.errors.0 }}</div>
+        {% endif %}
+    </form>
+
+    {% if result == 'not_found' %}
+    <div class="alert alert-warning">
+        لم يتم العثور على مستخلص بهذا الرقم
+    </div>
+
+    {% elif result %}
+    <div class="track-result">
+        <div class="track-header">
+            <h2>{{ result.statement_number }}</h2>
+            <span class="badge badge-{{ result.status|status_badge }} badge-lg">
+                {{ result.status|status_arabic }}
+            </span>
+            {% if result.is_deleted %}
+            <span class="badge badge-danger badge-lg">محذوف</span>
+            {% endif %}
+        </div>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <label>العقد:</label>
+                <span>{{ result.contract }}</span>
+            </div>
+            <div class="info-item">
+                <label>الفترة:</label>
+                <span>{{ result.month }}/{{ result.year }}</span>
+            </div>
+            <div class="info-item">
+                <label>الإجمالي شامل الضريبة:</label>
+                <span>{{ result.total_with_vat|currency }}</span>
+            </div>
+        </div>
+
+        {% if result.is_deleted %}
+        <div class="alert alert-danger">
+            <strong>محذوف بواسطة:</strong> {{ result.deleted_by.get_full_name|default:result.deleted_by.username }}
+            — <strong>تاريخ الحذف:</strong> {{ result.deleted_at|date:"d/m/Y H:i:s" }}
+            — <strong>السبب:</strong> {{ result.delete_reason }}
+        </div>
+        {% endif %}
+
+        {% if not chain_valid %}
+        <div class="alert alert-danger">
+            ⚠ تحذير: سلسلة التجزئة غير سليمة - قد يكون هناك تعديل مباشر في قاعدة البيانات
+        </div>
+        {% else %}
+        <div class="alert alert-success">
+            ✓ سلسلة التجزئة سليمة - لم يُكتشف أي تلاعب
+        </div>
+        {% endif %}
+
+        <h3>سجل الأحداث الكامل</h3>
+        <div class="timeline">
+            {% for event in events %}
+            <div class="timeline-item">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                    <div class="timeline-header">
+                        <strong>{{ event.get_event_type_display }}</strong>
+                        <span class="timeline-date">{{ event.timestamp|date:"d/m/Y H:i:s" }}</span>
+                    </div>
+                    <div class="timeline-body">
+                        <p><strong>المنفذ:</strong> {{ event.performed_by_name }}</p>
+                        <p><strong>الدور:</strong> {{ event.performed_by_role }}</p>
+                        {% if event.details %}
+                        <p><strong>التفاصيل:</strong> {{ event.details }}</p>
+                        {% endif %}
+                        {% if event.signature_snapshot %}
+                        <img src="data:image/png;base64,{{ event.signature_snapshot }}"
+                             alt="توقيع" class="signature-img">
+                        {% endif %}
+                        <small class="hash-display">بصمة: {{ event.event_hash|truncatechars:16 }}</small>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-center">لا توجد أحداث مسجّلة</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

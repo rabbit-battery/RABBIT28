@@ -1,0 +1,151 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}
+{% if show_items %}بنود - {{ contract }}
+{% elif show_technicians %}الفنيون
+{% elif show_holidays %}العطل الرسمية
+{% else %}العقود{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if show_items %}
+<div class="page-header">
+    <h1>بنود عقد: {{ contract.contract_number }}</h1>
+    <div class="page-actions">
+        <a href="{% url 'price_item_new' contract.pk %}" class="btn btn-primary">إضافة بند</a>
+        <a href="{% url 'price_items_export' contract.pk %}" class="btn btn-ghost">تصدير Excel</a>
+        <a href="{% url 'price_items_template' contract.pk %}" class="btn btn-ghost">قالب Excel</a>
+        <button type="button" class="btn btn-accent"
+                onclick="document.getElementById('items-import').hidden = !this.classList.toggle('active') || false">
+            استيراد Excel
+        </button>
+    </div>
+</div>
+
+<form id="items-import" method="post" enctype="multipart/form-data" class="card"
+      action="{% url 'price_items_import' contract.pk %}" hidden>
+    {% csrf_token %}
+    <div class="filters-row">
+        <label>
+            ملف بنود الأسعار (xlsx)
+            <input type="file" name="excel_file" accept=".xlsx" required>
+        </label>
+        <button type="submit" class="btn btn-primary">استيراد</button>
+    </div>
+    <p class="muted">
+        الأعمدة: كود البند، وصف البند، الوحدة، سعر الوحدة، نشط.
+        الكود الموجود يُحدَّث، والجديد يُنشأ. حمّل «قالب Excel» أولاً لتفادي أخطاء التنسيق.
+    </p>
+</form>
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr><th>الكود</th><th>الوصف</th><th>الوحدة</th><th>السعر</th><th>الحالة</th></tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.code }}</td>
+                <td>{{ item.description }}</td>
+                <td>{{ item.unit }}</td>
+                <td>{{ item.unit_price|currency }}</td>
+                <td>{% if item.is_active %}نشط{% else %}غير نشط{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center">لا توجد بنود</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p><a href="{% url 'contracts' %}" class="btn btn-secondary">رجوع للعقود</a></p>
+
+{% elif show_technicians %}
+<div class="page-header">
+    <h1>الفنيون</h1>
+    <a href="{% url 'technician_new' %}" class="btn btn-primary">إضافة فني</a>
+</div>
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr><th>الرقم الوظيفي</th><th>الاسم</th><th>التخصص</th><th>الحالة</th></tr>
+        </thead>
+        <tbody>
+            {% for t in technicians %}
+            <tr>
+                <td>{{ t.employee_number }}</td>
+                <td>{{ t.name }}</td>
+                <td>{{ t.specialty }}</td>
+                <td>{% if t.is_active %}نشط{% else %}غير نشط{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center">لا يوجد فنيون</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p><a href="{% url 'contracts' %}" class="btn btn-secondary">رجوع للعقود</a></p>
+
+{% elif show_holidays %}
+<div class="page-header">
+    <h1>العطل الرسمية</h1>
+    <a href="{% url 'holiday_new' %}" class="btn btn-primary">إضافة عطلة</a>
+</div>
+<div class="table-responsive">
+    <table class="table">
+        <thead><tr><th>التاريخ</th><th>المناسبة</th></tr></thead>
+        <tbody>
+            {% for h in holidays %}
+            <tr><td>{{ h.date|date:"d/m/Y" }}</td><td>{{ h.name }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center">لا توجد عطل مسجّلة</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p><a href="{% url 'contracts' %}" class="btn btn-secondary">رجوع للعقود</a></p>
+
+{% else %}
+<div class="page-header">
+    <h1>العقود</h1>
+    <a href="{% url 'contract_new' %}" class="btn btn-primary">إضافة عقد</a>
+</div>
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>رقم العقد</th>
+                <th>العنوان</th>
+                <th>البداية</th>
+                <th>النهاية</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in contracts %}
+            <tr>
+                <td>{{ c.contract_number }}</td>
+                <td>{{ c.title }}</td>
+                <td>{{ c.start_date|date:"d/m/Y" }}</td>
+                <td>{{ c.end_date|date:"d/m/Y" }}</td>
+                <td>{% if c.is_active %}نشط{% else %}غير نشط{% endif %}</td>
+                <td>
+                    <a href="{% url 'contract_edit' c.pk %}" class="btn btn-sm">تعديل</a>
+                    <a href="{% url 'price_items' c.pk %}" class="btn btn-sm">البنود</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center">لا توجد عقود</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="quick-links">
+    <a href="{% url 'technicians' %}" class="btn btn-secondary">الفنيون</a>
+    <a href="{% url 'holidays' %}" class="btn btn-secondary">العطل الرسمية</a>
+</div>
+{% endif %}
+
+{% endblock %}

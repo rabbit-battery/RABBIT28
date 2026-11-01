@@ -1,0 +1,51 @@
+{% extends "core/base.html" %}
+{% block title %}
+{% if is_item %}إضافة بند{% elif is_technician %}إضافة فني{% elif is_holiday %}إضافة عطلة
+{% elif editing %}تعديل عقد{% else %}إضافة عقد{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1>
+        {% if is_item %}إضافة بند لعقد {{ contract.contract_number }}
+        {% elif is_technician %}إضافة فني جديد
+        {% elif is_holiday %}إضافة عطلة رسمية
+        {% elif editing %}تعديل العقد
+        {% else %}إضافة عقد جديد{% endif %}
+    </h1>
+
+    <form method="post" class="styled-form" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">{{ form.non_field_errors.0 }}</div>
+        {% endif %}
+
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}
+            <small class="help-text">{{ field.help_text }}</small>
+            {% endif %}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">حفظ</button>
+            {% if is_item %}
+            <a href="{% url 'price_items' contract.pk %}" class="btn btn-secondary">إلغاء</a>
+            {% elif is_technician %}
+            <a href="{% url 'technicians' %}" class="btn btn-secondary">إلغاء</a>
+            {% elif is_holiday %}
+            <a href="{% url 'holidays' %}" class="btn btn-secondary">إلغاء</a>
+            {% else %}
+            <a href="{% url 'contracts' %}" class="btn btn-secondary">إلغاء</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

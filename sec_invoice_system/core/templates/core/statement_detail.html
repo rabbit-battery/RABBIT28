@@ -1,0 +1,264 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}مستخلص {{ statement.statement_number }}{% endblock %}
+
+{% block content %}
+
+{% if paying %}
+<div class="form-page">
+    <h1>تسجيل صرف المستخلص {{ statement.statement_number }}</h1>
+    <div class="info-grid">
+        <div class="info-item">
+            <label>الإجمالي شامل الضريبة:</label>
+            <span>{{ statement.total_with_vat|currency }}</span>
+        </div>
+        <div class="info-item">
+            <label>المبلغ بالحروف:</label>
+            <span>{{ statement.total_in_words }}</span>
+        </div>
+    </div>
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+        {% for field in po_form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">تسجيل الصرف</button>
+            <a href="{% url 'statement_detail' statement.pk %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+
+{% elif deleting %}
+<div class="form-page">
+    <h1>حذف المستخلص {{ statement.statement_number }}</h1>
+    <div class="alert alert-warning">
+        سيتم حذف المستخلص وتحرير المهام المرتبطة. هذا الإجراء يُسجَّل في التتبع ولا يمكن إخفاؤه.
+    </div>
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+        {% for field in delete_form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger">تأكيد الحذف</button>
+            <a href="{% url 'statement_detail' statement.pk %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+
+{% elif editing_notes %}
+<div class="form-page">
+    <h1>تعديل ملاحظات المستخلص {{ statement.statement_number }}</h1>
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+        {% for field in notes_form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">حفظ الملاحظات</button>
+            <a href="{% url 'statement_detail' statement.pk %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+
+{% else %}
+<div class="statement-detail">
+    <div class="page-header">
+        <h1>مستخلص {{ statement.statement_number }}</h1>
+        <span class="badge badge-{{ statement.status|status_badge }} badge-lg">
+            {{ statement.status|status_arabic }}
+        </span>
+        {% if statement.is_deleted %}
+        <span class="badge badge-danger badge-lg">محذوف</span>
+        {% endif %}
+    </div>
+
+    <div class="info-grid">
+        <div class="info-item">
+            <label>العقد:</label>
+            <span>{{ statement.contract }}</span>
+        </div>
+        <div class="info-item">
+            <label>الفترة:</label>
+            <span>{{ statement.month }}/{{ statement.year }}</span>
+        </div>
+        <div class="info-item">
+            <label>الإصدار:</label>
+            <span>{{ statement.revision }}</span>
+        </div>
+        <div class="info-item">
+            <label>أنشئ بواسطة:</label>
+            <span>{{ statement.created_by.get_full_name|default:statement.created_by.username }}</span>
+        </div>
+        {% if statement.po_number %}
+        <div class="info-item">
+            <label>رقم أمر الشراء:</label>
+            <span>{{ statement.po_number }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <h2>البنود</h2>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>كود البند</th>
+                    <th>الوصف</th>
+                    <th>الوحدة</th>
+                    <th>سعر الوحدة</th>
+                    <th>الكمية</th>
+                    <th>الإجمالي</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}
+                <tr>
+                    <td>{{ line.item_code }}</td>
+                    <td>{{ line.item_description }}</td>
+                    <td>{{ line.unit }}</td>
+                    <td>{{ line.unit_price|currency }}</td>
+                    <td>{{ line.total_quantity }}</td>
+                    <td>{{ line.line_total|currency }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center">لا توجد بنود</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="5">الإجمالي قبل الضريبة</td>
+                    <td>{{ statement.subtotal|currency }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td colspan="5">ضريبة القيمة المضافة</td>
+                    <td>{{ statement.vat_amount|currency }}</td>
+                </tr>
+                <tr class="grand-total-row">
+                    <td colspan="5">الإجمالي شامل الضريبة</td>
+                    <td>{{ statement.total_with_vat|currency }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <div class="amount-words">
+        <strong>المبلغ بالحروف:</strong> {{ statement.total_in_words }}
+    </div>
+
+    {% if statement.notes %}
+    <div class="notes-section">
+        <strong>ملاحظات:</strong>
+        <p>{{ statement.notes }}</p>
+    </div>
+    {% endif %}
+
+    {% if statement.is_deleted %}
+    <div class="alert alert-danger">
+        <strong>محذوف بواسطة:</strong> {{ statement.deleted_by.get_full_name|default:statement.deleted_by.username }} —
+        <strong>التاريخ:</strong> {{ statement.deleted_at|date:"d/m/Y H:i:s" }} —
+        <strong>السبب:</strong> {{ statement.delete_reason }}
+    </div>
+    {% else %}
+    <div class="action-buttons">
+        {% if statement.status == 'draft' %}
+            {% if user.profile.specialty == 'branch_manager' or user.is_superuser %}
+            <form method="post" action="{% url 'statement_review' statement.pk %}" class="inline-form">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-info">مراجعة</button>
+            </form>
+            {% endif %}
+            <a href="{% url 'statement_notes' statement.pk %}" class="btn btn-secondary">
+                تعديل الملاحظات
+            </a>
+        {% endif %}
+
+        {% if statement.status == 'reviewed' %}
+            {% if user.profile.specialty == 'approver' or user.is_superuser %}
+            <form method="post" action="{% url 'statement_approve' statement.pk %}" class="inline-form">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success">اعتماد</button>
+            </form>
+            {% endif %}
+        {% endif %}
+
+        {% if statement.status == 'approved' %}
+            {% if user.profile.specialty == 'accountant' or user.is_superuser %}
+            <a href="{% url 'statement_pay' statement.pk %}" class="btn btn-primary">تسجيل الصرف</a>
+            {% endif %}
+        {% endif %}
+
+        {% if statement.status != 'paid' %}
+            {% if user.profile.specialty == 'branch_manager' or user.profile.specialty == 'accountant' or user.is_superuser %}
+            <a href="{% url 'statement_delete' statement.pk %}" class="btn btn-danger">حذف</a>
+            {% endif %}
+        {% endif %}
+
+        <a href="{% url 'statement_pdf' statement.pk %}" class="btn btn-dark">تصدير PDF</a>
+        <a href="{% url 'statement_xlsx' statement.pk %}" class="btn btn-dark">تصدير Excel</a>
+    </div>
+    {% endif %}
+
+    <h2>سجل الأحداث</h2>
+    {% if not chain_valid %}
+    <div class="alert alert-danger">
+        ⚠ تحذير: تم اكتشاف تعديل غير مصرح به في سلسلة الأحداث!
+    </div>
+    {% else %}
+    <div class="alert alert-success">
+        ✓ سلسلة الأحداث سليمة
+    </div>
+    {% endif %}
+
+    <div class="timeline">
+        {% for event in events %}
+        <div class="timeline-item">
+            <div class="timeline-marker
+                {% if event.event_type == 'deleted' %}marker-danger
+                {% elif event.event_type == 'paid' %}marker-success
+                {% elif event.event_type == 'approved' %}marker-primary
+                {% endif %}">
+            </div>
+            <div class="timeline-content">
+                <div class="timeline-header">
+                    <strong>{{ event.get_event_type_display }}</strong>
+                    <span class="timeline-date">{{ event.timestamp|date:"d/m/Y H:i:s" }}</span>
+                </div>
+                <div class="timeline-body">
+                    <p>{{ event.performed_by_name }} ({{ event.performed_by_role }})</p>
+                    {% if event.details %}
+                    <p class="event-details">{{ event.details }}</p>
+                    {% endif %}
+                    {% if event.signature_snapshot %}
+                    <img src="data:image/png;base64,{{ event.signature_snapshot }}"
+                         alt="توقيع" class="signature-img">
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-center">لا توجد أحداث مسجّلة</p>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

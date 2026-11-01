@@ -1,0 +1,68 @@
+{% extends "core/base.html" %}
+{% load static core_tags %}
+{% block title %}لوحة المتابعة{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>لوحة المتابعة</h1>
+
+    <div class="filter-bar">
+        <form method="get" class="inline-form" id="contractFilterForm">
+            <select name="contract" class="form-control" id="contractFilter">
+                <option value="">جميع العقود</option>
+                {% for c in contracts %}
+                <option value="{{ c.pk }}" {% if selected_contract == c.pk|stringformat:"d" %}selected{% endif %}>
+                    {{ c.contract_number }} - {{ c.title }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <div class="cards-grid">
+        <div class="card card-blue">
+            <div class="card-title">تكلفة اليوم</div>
+            <div class="card-value">{{ daily_cost|currency }}</div>
+            <div class="card-date">{{ today|date:"l d/m/Y" }}</div>
+        </div>
+
+        <div class="card card-green">
+            <div class="card-title">المتراكم الشهري</div>
+            <div class="card-value">{{ monthly_accumulated|currency }}</div>
+        </div>
+
+        <div class="card card-orange">
+            <div class="card-title">المتوقع نهاية الشهر</div>
+            <div class="card-value">{{ monthly_forecast|currency }}</div>
+        </div>
+
+        <div class="card card-purple">
+            <div class="card-title">المتراكم السنوي</div>
+            <div class="card-value">{{ yearly_accumulated|currency }}</div>
+        </div>
+
+        <div class="card card-red">
+            <div class="card-title">المتوقع نهاية السنة</div>
+            <div class="card-value">{{ yearly_forecast|currency }}</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <h2>التكلفة اليومية للشهر الحالي</h2>
+        <canvas id="dailyChart"></canvas>
+        <p id="chartUnavailable" class="help-text" hidden>
+            تعذّر تحميل بيانات الرسم البياني.
+        </p>
+    </div>
+
+    <div id="dayDetails" class="day-details" hidden>
+        <h3 id="dayTitle"></h3>
+        <div id="dayContent"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'core/lib/chart.min.js' %}"></script>
+<script src="{% static 'core/js/dashboard.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "core/base.html" %}
+{% block title %}صورة التوقيع{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1>صورة التوقيع/الختم</h1>
+
+    {% if has_signature %}
+    <div class="alert alert-info">
+        لديك صورة توقيع مرفوعة مسبقاً. رفع صورة جديدة يحل محلها، ويبقى التوقيع القديم محفوظاً
+        داخل الأحداث التي وُقّعت به.
+        <div style="margin-top:8px;padding:8px;background:#fff;border:1px solid #ddd;display:inline-block">
+            <img src="data:image/png;base64,{{ signature_b64 }}" alt="صورة التوقيع الحالية"
+                 style="max-height:80px;max-width:240px">
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="info-box">
+        <p>صورة التوقيع تظهر في سجل الأحداث وتقارير PDF عند كل إجراء تقوم به (مراجعة، اعتماد، صرف).</p>
+        <ul>
+            <li>الصيغ المدعومة: PNG، JPEG</li>
+            <li>الحد الأقصى: 1 ميغابايت</li>
+            <li>يُعاد معالجة الصورة لإزالة أي بيانات مخفية</li>
+        </ul>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="styled-form">
+        {% csrf_token %}
+
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">رفع التوقيع</button>
+    </form>
+</div>
+{% endblock %}

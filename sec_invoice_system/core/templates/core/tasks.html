@@ -1,0 +1,81 @@
+{% extends "core/base.html" %}
+{% load core_tags %}
+{% block title %}المهام{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>المهام</h1>
+    <div class="actions">
+        <a href="{% url 'task_new' %}" class="btn btn-primary">إضافة مهمة</a>
+        <a href="{% url 'task_import' %}" class="btn btn-secondary">استيراد Excel</a>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <form method="get" class="filter-form">
+        <select name="contract" class="form-control">
+            <option value="">جميع العقود</option>
+            {% for c in contracts %}
+            <option value="{{ c.pk }}">{{ c.contract_number }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date_from" class="form-control" title="من تاريخ">
+        <input type="date" name="date_to" class="form-control" title="إلى تاريخ">
+        <button type="submit" class="btn btn-sm">بحث</button>
+    </form>
+</div>
+
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>التاريخ</th>
+                <th>الفني</th>
+                <th>البند</th>
+                <th>الكمية</th>
+                <th>سعر الوحدة</th>
+                <th>التكلفة</th>
+                <th>الموقع</th>
+                <th>الحالة</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr {% if task.is_locked %}class="locked"{% endif %}>
+                <td>{{ task.task_date|date:"d/m/Y" }}</td>
+                <td>{{ task.technician.name }}</td>
+                <td>{{ task.price_item.code }} - {{ task.price_item.description }}</td>
+                <td>{{ task.quantity }}</td>
+                <td>{{ task.unit_price_snapshot|currency }}</td>
+                <td>{{ task.total_cost|currency }}</td>
+                <td>{{ task.location }}</td>
+                <td>
+                    {% if task.is_locked %}
+                    <span class="badge badge-locked">مقفل</span>
+                    {% else %}
+                    <span class="badge badge-open">مفتوح</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if not task.is_locked %}
+                    <a href="{% url 'task_edit' task.pk %}" class="btn btn-sm btn-edit">تعديل</a>
+                    <form method="post" action="{% url 'task_delete' task.pk %}"
+                          class="inline-form" data-confirm="هل أنت متأكد من حذف هذه المهمة؟">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger">حذف</button>
+                    </form>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center">لا توجد مهام</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
