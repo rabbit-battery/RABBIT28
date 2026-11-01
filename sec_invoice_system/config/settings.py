@@ -1,6 +1,7 @@
 """إعدادات نظام مستخلصات العقد الموحد - الشركة السعودية للكهرباء."""
 
 import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,6 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'change-me-in-production-to-random-50-chars')
 
 DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
+
+# مُشغّل الاختبارات يفرض DEBUG=False، ومعها يعمل SECURE_SSL_REDIRECT
+# فيتحول كل طلب HTTP في عميل الاختبار إلى 301 ويفشل معظم الاختبارات.
+# الإعفاء للاختبارات فقط؛ سلوك الإنتاج لا يتغير.
+TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -198,7 +204,8 @@ PRIVATE_MEDIA_ROOT = _resolve_path(os.environ.get('PRIVATE_MEDIA_ROOT', 'private
 #       staticfiles.json، فيُفشل الاختبارات.
 STATICFILES_BACKEND = os.environ.get(
     'DJANGO_STATIC_STORAGE',
-    'whitenoise.storage.CompressedManifestStaticFilesStorage' if not DEBUG
+    'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    if not DEBUG and not TESTING
     else 'django.contrib.staticfiles.storage.StaticFilesStorage',
 )
 
@@ -213,7 +220,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ──────────── الأمان ────────────
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = not TESTING
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
