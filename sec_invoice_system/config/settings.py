@@ -164,15 +164,27 @@ LOGOUT_REDIRECT_URL = 'login'
 
 # ──────────── الملفات ────────────
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+
+def _resolve_path(value, default):
+    """مسار مطلق كما هو، أو نسبي فيُحلّ تحت BASE_DIR."""
+    p = Path(value)
+    return p if p.is_absolute() else (BASE_DIR / p)
+
+
+# STATIC_ROOT قابل للتحديد بمتغير بيئة: على Vercel يوضع تحت public/static
+# لأن Vercel يخدم مجلد الإخراج من حافة الشبكة، فيُطلب الملف من
+# /static/core/css/style.css ويقابله public/static/core/css/style.css.
+STATIC_ROOT = _resolve_path(os.environ.get('STATIC_ROOT', 'staticfiles'),
+                            BASE_DIR / 'staticfiles')
 MEDIA_URL = '/media/'
 
 # المسارات قابلة للتحديد بمتغيرات بيئة: النشر serverless (Vercel) قرصُه
 # للقراءة فقط عدا /tmp، فيُوجَّه الرفع إليه. (الصور الموقّعة محفوظة في قاعدة
 # البيانات فلا تتأثر؛ هذا خاص بمرفقات العقود المؤقتة.)
-MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
-PRIVATE_MEDIA_ROOT = Path(os.environ.get('PRIVATE_MEDIA_ROOT',
-                                         BASE_DIR / 'private_media'))
+MEDIA_ROOT = _resolve_path(os.environ.get('MEDIA_ROOT', 'media'), BASE_DIR / 'media')
+PRIVATE_MEDIA_ROOT = _resolve_path(os.environ.get('PRIVATE_MEDIA_ROOT', 'private_media'),
+                                   BASE_DIR / 'private_media')
 
 # WhiteNoise يخدم الملفات الثابتة. خلفية الملفات الثابتة قابلة للتحديد
 # بمتغير بيئة DJANGO_STATIC_STORAGE لأن المعالجة اللاحقة (ضغط gzip/brotli +
