@@ -64,8 +64,12 @@ class Command(BaseCommand):
         profile.must_change_password = False
         profile.save()
 
-        password = opts['password']
-        if password is None and (created or opts['reset_password']):
+        # كلمة المرور تُضبط عند الإنشاء فقط، أو عند طلب صريح بـ --reset-password.
+        # الأمر يُنفَّذ في كل بناء على Vercel؛ لو أعدنا الضبط في كل مرة
+        # لمُسحت أي كلمة مرور غيّرها المستخدم من الواجهة.
+        want_password = created or opts['reset_password']
+        password = opts['password'] if want_password else None
+        if password is None and want_password:
             password = getpass.getpass('كلمة المرور: ')
             confirm = getpass.getpass('تأكيد كلمة المرور: ')
             if password != confirm:
