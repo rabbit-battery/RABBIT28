@@ -1,7 +1,8 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 
-from . import views, views_statements, views_tracking, views_users
+from . import (views, views_statements, views_tracking, views_users,
+             views_settings)
 
 urlpatterns = [
     # الدخول والخروج
@@ -22,6 +23,9 @@ urlpatterns = [
     # بنود الأسعار
     path('contracts/<int:contract_id>/items/', views.price_items, name='price_items'),
     path('contracts/<int:contract_id>/items/new/', views.price_item_form, name='price_item_new'),
+    path('contracts/<int:contract_id>/items/xlsx/', views.price_items_export, name='price_items_export'),
+    path('contracts/<int:contract_id>/items/template/', views.price_items_template, name='price_items_template'),
+    path('contracts/<int:contract_id>/items/import/', views.price_items_import, name='price_items_import'),
 
     # الفنيون
     path('technicians/', views.technician_list, name='technicians'),
@@ -58,6 +62,7 @@ urlpatterns = [
 
     # API
     path('api/daily/', views.api_daily_costs, name='api_daily_costs'),
+    path('reports/daily/', views.daily_report, name='daily_report'),
 
     # المستخدمون
     path('users/', views_users.user_list, name='users'),
@@ -66,6 +71,9 @@ urlpatterns = [
     path('users/<int:pk>/reset-password/', views_users.user_reset_password, name='user_reset_password'),
 
     # التوقيع
+    # الإدارة الفنية
+    path('settings/', views_settings.site_settings_view, name='site_settings'),
+
     path('profile/signature/', views_users.signature_upload, name='signature_upload'),
 
     # 2FA

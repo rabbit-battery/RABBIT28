@@ -9,8 +9,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import JsonResponse
-from django.db.models import Sum
+from django.http import HttpResponse, JsonResponse
+from django.db.models import Count as models_Count, Sum
 from django.utils import timezone
 
 import openpyxl
@@ -333,6 +333,35 @@ def task_delete(request, pk):
     return redirect('tasks')
 
 
+def _resolve_price_item(contract, raw):
+    """
+    إيجاد البند من خلية قد تكون كوداً أو نوع عمل (وصفاً).
+
+    المُدخِل يكتب أحياناً كود البند وأحياناً اسم العمل كما في تقرير الفني.
+    نجرب الكود أولاً لأنه دقيق، ثم نطابق الوصف بعد توحيد المسافات وحالة
+    الأحرف. إن تطابق أكثر من بند نرفض بدل التخمين، لأن التسعير الخاطئ
+    يظهر لاحقاً في مستخلص مالي.
+    """
+    value = str(raw or '').strip()
+    if not value:
+        return None
+
+    item = PriceItem.objects.filter(
+        contract=contract, code=value, is_active=True
+    ).first()
+    if item is not None:
+        return item
+
+    normalized = ' '.join(value.split()).casefold()
+    candidates = [
+        p for p in PriceItem.objects.filter(contract=contract, is_active=True)
+        if ' '.join(p.description.split()).casefold() == normalized
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 def _coerce_task_date(raw):
     """تحويل خلية التاريخ في Excel إلى date أو إرجاع None"""
     if isinstance(raw, datetime):
@@ -404,11 +433,9 @@ def task_import(request):
             errors.append(f'السطر {i}: فني غير موجود: {tech_num}')
             continue
 
-        item = PriceItem.objects.filter(
-            contract=contract, code=str(item_code).strip(), is_active=True
-        ).first()
+        item = _resolve_price_item(contract, item_code)
         if item is None:
-            errors.append(f'السطر {i}: بند غير موجود: {item_code}')
+            errors.append(f'السطر {i}: بند غير موجود بالكود أو نوع العمل: {item_code}')
             continue
 
         task_date = _coerce_task_date(raw_date)
@@ -590,3 +617,213 @@ def _issue_backup_codes(user, count=8):
         StaticToken.objects.create(device=static_device, token=code)
         codes.append(code)
     return codes
+
+
+# ═══════════════════════════════════════════
+#  بنود الأسعار: Excel (تصدير / قالب / استيراد)
+# ═══════════════════════════════════════════
+PRICE_ITEM_HEADERS = ['كود البند', 'وصف البند', 'الوحدة', 'سعر الوحدة', 'نشط']
+_XLSX_MIME = ('application/vnd.openxmlformats-officedocument.'
+              'spreadsheetml.sheet')
+
+
+def _price_items_workbook(items):
+    from openpyxl.styles import Font
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'بنود الأسعار'
+    ws.append(PRICE_ITEM_HEADERS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for it in items:
+        ws.append([it.code, it.description, it.unit,
+                   float(it.unit_price), 'نعم' if it.is_active else 'لا'])
+    for col, width in zip('ABCDE', (16, 46, 14, 14, 10)):
+        ws.column_dimensions[col].width = width
+    ws.sheet_view.rightToLeft = True
+    return wb
+
+
+def _xlsx_response(wb, filename):
+    response = HttpResponse(content_type=_XLSX_MIME)
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+@login_required
+@role_required('contract_manager', 'technical_admin', 'accountant')
+def price_items_export(request, contract_id):
+    """تصدير بنود العقد وقيمها إلى Excel"""
+    contract = get_object_or_404(Contract, pk=contract_id)
+    wb = _price_items_workbook(contract.price_items.order_by('code'))
+    log_audit(request, 'export_price_items',
+              f'تصدير بنود العقد {contract.contract_number}')
+    return _xlsx_response(wb, f'price_items_{contract.contract_number}.xlsx')
+
+
+@login_required
+@role_required('contract_manager', 'technical_admin')
+def price_items_template(request, contract_id):
+    """قالب Excel فارغ بصف مثال، ليكون الاستيراد بلا أخطاء تنسيق"""
+    contract = get_object_or_404(Contract, pk=contract_id)
+    from openpyxl.styles import Font
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'بنود الأسعار'
+    ws.append(PRICE_ITEM_HEADERS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    ws.append(['1.1.1', 'مثال: صيانة لوحة جهد منخفض', 'وحدة', 750.00, 'نعم'])
+    for col, width in zip('ABCDE', (16, 46, 14, 14, 10)):
+        ws.column_dimensions[col].width = width
+    ws.sheet_view.rightToLeft = True
+    return _xlsx_response(wb, f'template_{contract.contract_number}.xlsx')
+
+
+@login_required
+@role_required('contract_manager', 'technical_admin')
+def price_items_import(request, contract_id):
+    """
+    استيراد بنود العقد من Excel.
+
+    الكود الموجود يُحدَّث سعره ووصفه، والجديد يُنشأ. لا يُحذف أي بند لأن
+    المهام تربط به بـ PROTECT؛ إلغاء التفعيل يتم من الشاشة.
+    """
+    contract = get_object_or_404(Contract, pk=contract_id)
+    if request.method != 'POST' or 'excel_file' not in request.FILES:
+        messages.error(request, 'لم يُرفع ملف')
+        return redirect('price_items', contract_id=contract.pk)
+
+    upload = request.FILES['excel_file']
+    if upload.size > settings.MAX_EXCEL_SIZE_MB * 1024 * 1024:
+        messages.error(request, f'حجم الملف يتجاوز {settings.MAX_EXCEL_SIZE_MB} ميغابايت')
+        return redirect('price_items', contract_id=contract.pk)
+
+    try:
+        wb = openpyxl.load_workbook(upload, read_only=True, data_only=True)
+        rows = list(wb.active.iter_rows(min_row=2, values_only=True))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('فشل قراءة ملف بنود الأسعار: %s', exc)
+        messages.error(request, 'تعذّر قراءة الملف. تأكد أنه xlsx سليم')
+        return redirect('price_items', contract_id=contract.pk)
+
+    if len(rows) > settings.MAX_EXCEL_ROWS:
+        messages.error(request, f'عدد الأسطر يتجاوز {settings.MAX_EXCEL_ROWS}')
+        return redirect('price_items', contract_id=contract.pk)
+
+    existing = {p.code: p for p in contract.price_items.all()}
+    created = updated = 0
+    errors = []
+
+    for i, row in enumerate(rows, start=2):
+        if row is None or all(c is None or c == '' for c in row):
+            continue
+        if len(row) < 4:
+            errors.append(f'السطر {i}: أعمدة ناقصة (المطلوب 4 على الأقل)')
+            continue
+        code = str(row[0] or '').strip()
+        desc = str(row[1] or '').strip()
+        unit = str(row[2] or '').strip()
+        if not code or not desc or not unit:
+            errors.append(f'السطر {i}: كود أو وصف أو وحدة فارغة')
+            continue
+        try:
+            price = Decimal(str(row[3]).strip())
+            if price <= 0:
+                raise InvalidOperation
+        except (InvalidOperation, ValueError, TypeError, AttributeError):
+            errors.append(f'السطر {i}: سعر غير صحيح: {row[3]}')
+            continue
+        active_raw = str(row[4]).strip() if len(row) > 4 and row[4] is not None else 'نعم'
+        active = active_raw not in ('لا', 'no', 'No', '0', 'false', 'False')
+
+        if code in existing:
+            item = existing[code]
+            item.description, item.unit = desc, unit
+            item.unit_price, item.is_active = price, active
+            item.full_clean()
+            item.save()
+            updated += 1
+        else:
+            item = PriceItem(contract=contract, code=code, description=desc,
+                             unit=unit, unit_price=price, is_active=active)
+            item.full_clean()
+            item.save()
+            existing[code] = item
+            created += 1
+
+        if len(errors) >= 20:
+            errors.append('... تم الإيقاف بعد 20 خطأ')
+            break
+
+    for err in errors:
+        messages.error(request, err)
+    if not errors and (created or updated):
+        log_audit(request, 'import_price_items',
+                  f'استيراد بنود للعقد {contract.contract_number}: '
+                  f'{created} جديد، {updated} محدَّث')
+        messages.success(request, f'تم: {created} بند جديد، {updated} بند محدَّث')
+    return redirect('price_items', contract_id=contract.pk)
+
+
+# ═══════════════════════════════════════════
+#  نتائج الأيام
+# ═══════════════════════════════════════════
+@login_required
+def daily_report(request):
+    """
+    جدول نتائج الأيام: كم任务 في كل يوم وكم المبلغ.
+
+    يُظهر أيضاً عدد الأيام المتبقية من الشهر ومتوسط اليوم، لأن «كم الفلوس»
+    وحدها لا تكفي لمعرفة ما إذا كان الشهر يسير ضمن المتوقع.
+    """
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get('year') or today.year)
+        month = int(request.GET.get('month') or today.month)
+    except (TypeError, ValueError):
+        year, month = today.year, today.month
+    if not 1 <= month <= 12:
+        month = today.month
+
+    contract_id = request.GET.get('contract') or ''
+    tasks = Task.objects.filter(task_date__year=year, task_date__month=month)
+    if contract_id:
+        tasks = tasks.filter(contract_id=contract_id)
+
+    rows_map = {}
+    for agg in tasks.values('task_date').annotate(
+            count=models_Count('pk'), total=Sum('total_cost')):
+        rows_map[agg['task_date']] = agg
+
+    days = []
+    day = date(year, month, 1)
+    while day.month == month:
+        agg = rows_map.get(day)
+        days.append({
+            'date': day,
+            'is_future': day > today,
+            'count': agg['count'] if agg else 0,
+            'total': agg['total'] if agg else Decimal('0.00'),
+        })
+        day += timedelta(days=1)
+
+    month_total = sum((d['total'] for d in days), Decimal('0.00'))
+    elapsed = [d for d in days if not d['is_future']]
+    worked = [d for d in elapsed if d['count'] > 0]
+    avg_per_day = (month_total / len(worked)).quantize(Decimal('0.01')) if worked else Decimal('0.00')
+    remaining = len(days) - len(elapsed)
+    forecast = (month_total + avg_per_day * remaining).quantize(Decimal('0.01'))
+
+    return render(request, 'core/daily_report.html', {
+        'days': days, 'year': year, 'month': month,
+        'month_total': month_total, 'avg_per_day': avg_per_day,
+        'remaining_days': remaining, 'forecast': forecast,
+        'contracts': Contract.objects.filter(is_active=True),
+        'selected_contract': contract_id,
+        'prev_month': (month - 1) or 12,
+        'prev_year': year - 1 if month == 1 else year,
+        'next_month': (month % 12) + 1,
+        'next_year': year + 1 if month == 12 else year,
+    })

@@ -20,6 +20,21 @@ SPECIALTY_GROUP_MAP = {
 }
 
 
+def _can_manage_role(actor, specialty):
+    """
+    هل يجوز لـ actor إنشاء/تعديل مستخدم بهذا التخصص؟
+
+    الأدوار في UserProfile.PROTECTED_SPECIALTIES (حالياً technical_admin)
+    لا تُنشأ ولا تُعيَّن إلا بواسطة إدارة فنية أو مدير أعلى. بدون هذا القيد
+    يستطيع أي مدير عقود أن يرقّي نفسه أو غيره إلى إدارة فنية فيمتلك التحكم
+    في هيكل النظام كله.
+    """
+    if specialty not in UserProfile.PROTECTED_SPECIALTIES:
+        return True
+    return actor.is_superuser or getattr(
+        getattr(actor, 'profile', None), 'specialty', None) == 'technical_admin'
+
+
 def generate_temp_password():
     """توليد كلمة مرور مؤقتة قوية"""
     alphabet = string.ascii_letters + string.digits + "!@#$%"
@@ -27,14 +42,14 @@ def generate_temp_password():
 
 
 @login_required
-@role_required('contract_manager')
+@role_required('contract_manager', 'technical_admin')
 def user_list(request):
     users = User.objects.filter(is_superuser=False).select_related('profile')
     return render(request, 'core/users.html', {'users': users})
 
 
 @login_required
-@role_required('contract_manager')
+@role_required('contract_manager', 'technical_admin')
 def user_create(request):
     if request.method == 'POST':
         form = UserCreateForm(request.POST)
@@ -47,6 +62,11 @@ def user_create(request):
                 return redirect('user_create')
             if UserProfile.objects.filter(employee_id=employee_id).exists():
                 messages.error(request, 'الرقم الوظيفي مستخدم مسبقاً')
+                return redirect('user_create')
+
+            if not _can_manage_role(request.user, form.cleaned_data['specialty']):
+                messages.error(request,
+                               'هذا التخصص محمي ولا يُنشأ إلا بواسطة الإدارة الفنية')
                 return redirect('user_create')
 
             temp_password = generate_temp_password()
@@ -87,7 +107,7 @@ def user_create(request):
 
 
 @login_required
-@role_required('contract_manager')
+@role_required('contract_manager', 'technical_admin')
 def user_edit(request, pk):
     user = get_object_or_404(User, pk=pk)
 
@@ -104,17 +124,26 @@ def user_edit(request, pk):
                 messages.error(request, 'الرقم الوظيفي مستخدم مسبقاً')
                 return redirect('user_edit', pk=pk)
 
+            new_specialty = form.cleaned_data['specialty']
+            # الدور المحمي لا يُمنح ولا يُسحب إلا بواسطة إدارة فنية، وإلا
+            # استطاع مدير العقود ترقية نفسه أو تجريد الإدارة الفنية من دورها.
+            if (not _can_manage_role(request.user, new_specialty)
+                    or not _can_manage_role(request.user, user.profile.specialty)):
+                messages.error(request,
+                               'هذا التخصص محمي ولا يعدّله إلا الإدارة الفنية')
+                return redirect('user_edit', pk=pk)
+
             user.first_name = form.cleaned_data['first_name']
             user.last_name = form.cleaned_data['last_name']
             user.email = form.cleaned_data['email']
             user.save()
 
             profile = user.profile
-            profile.specialty = form.cleaned_data['specialty']
+            profile.specialty = new_specialty
             profile.employee_id = employee_id
             profile.save()
 
-            group_name = SPECIALTY_GROUP_MAP.get(form.cleaned_data['specialty'])
+            group_name = SPECIALTY_GROUP_MAP.get(new_specialty)
             if group_name:
                 group = Group.objects.filter(name=group_name).first()
                 if group:
@@ -140,7 +169,7 @@ def user_edit(request, pk):
 
 
 @login_required
-@role_required('contract_manager')
+@role_required('contract_manager', 'technical_admin')
 def user_reset_password(request, pk):
     user = get_object_or_404(User, pk=pk)
 

@@ -12,8 +12,32 @@
 {% if show_items %}
 <div class="page-header">
     <h1>بنود عقد: {{ contract.contract_number }}</h1>
-    <a href="{% url 'price_item_new' contract.pk %}" class="btn btn-primary">إضافة بند</a>
+    <div class="page-actions">
+        <a href="{% url 'price_item_new' contract.pk %}" class="btn btn-primary">إضافة بند</a>
+        <a href="{% url 'price_items_export' contract.pk %}" class="btn btn-ghost">تصدير Excel</a>
+        <a href="{% url 'price_items_template' contract.pk %}" class="btn btn-ghost">قالب Excel</a>
+        <button type="button" class="btn btn-accent"
+                onclick="document.getElementById('items-import').hidden = !this.classList.toggle('active') || false">
+            استيراد Excel
+        </button>
+    </div>
 </div>
+
+<form id="items-import" method="post" enctype="multipart/form-data" class="card"
+      action="{% url 'price_items_import' contract.pk %}" hidden>
+    {% csrf_token %}
+    <div class="filters-row">
+        <label>
+            ملف بنود الأسعار (xlsx)
+            <input type="file" name="excel_file" accept=".xlsx" required>
+        </label>
+        <button type="submit" class="btn btn-primary">استيراد</button>
+    </div>
+    <p class="muted">
+        الأعمدة: كود البند، وصف البند، الوحدة، سعر الوحدة، نشط.
+        الكود الموجود يُحدَّث، والجديد يُنشأ. حمّل «قالب Excel» أولاً لتفادي أخطاء التنسيق.
+    </p>
+</form>
 <div class="table-responsive">
     <table class="table">
         <thead>

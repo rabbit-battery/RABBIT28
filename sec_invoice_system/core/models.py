@@ -24,7 +24,13 @@ class UserProfile(models.Model):
         ('branch_manager', 'مدير الفرع'),
         ('approver', 'معتمد المستخلص'),
         ('contract_manager', 'مدير العقود'),
+        ('technical_admin', 'إدارة فنية'),
     ]
+
+    # أدوار محمية: لا ينشئها ولا يعيّنها إلا «إدارة فنية» نفسه.
+    # بدون هذا القيد يستطيع أي مدير عقود أن يرقّي نفسه أو غيره إلى إدارة فنية
+    # فيمتلك صلاحيات تعديل هيكل النظام كلها.
+    PROTECTED_SPECIALTIES = ('technical_admin',)
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -470,6 +476,9 @@ class AuditLog(models.Model):
         ('track_search', 'بحث في التتبع'),
         ('upload', 'رفع ملف'),
         ('import_tasks', 'استيراد مهام'),
+        ('import_price_items', 'استيراد بنود أسعار'),
+        ('export_price_items', 'تصدير بنود أسعار'),
+        ('settings_updated', 'تعديل إعدادات الموقع'),
     ]
 
     user = models.ForeignKey(
@@ -488,3 +497,78 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.get_action_display()} - {self.timestamp}"
+
+
+# ═══════════════════════════════════════════
+#  إعدادات الموقع (يتحكم بها «إدارة فنية» فقط)
+# ═══════════════════════════════════════════
+class SiteSettings(models.Model):
+    """
+    إعدادات المظهر وهيكل العمل، صف واحد فقط (singleton).
+
+    تُعدَّل من شاشة «الإدارة الفنية» حصراً. القيم محفوظة في قاعدة البيانات
+    لا في الكود، فيمكن تغيير الاسم والألوان والترتيب دون نشر جديد.
+    """
+
+    THEME_CHOICES = [
+        ('corporate', 'شركات كبرى'),
+        ('compact', 'مضغوط'),
+        ('highcontrast', 'تباين عالٍ'),
+    ]
+
+    site_name = models.CharField('اسم النظام', max_length=100,
+                                 default='نظام مستخلصات العقد الموحد')
+    org_name = models.CharField('اسم الجهة', max_length=100,
+                                default='الشركة السعودية للكهرباء')
+    primary_color = models.CharField('اللون الأساسي', max_length=7, default='#0B6E4F')
+    accent_color = models.CharField('اللون الثانوي', max_length=7, default='#F2A900')
+    theme = models.CharField('نمط التصميم', max_length=20, choices=THEME_CHOICES,
+                             default='corporate')
+    # ترتيب عناصر القائمة، مفصولة بفواصل. يُتحقّق منه في clean().
+    nav_order = models.CharField(
+        'ترتيب القائمة', max_length=255,
+        default='dashboard,tasks,statements,track,compare,contracts,users,settings',
+    )
+    show_forecast = models.BooleanField('إظهار التوقعات', default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='settings_changes',
+        verbose_name='آخر تعديل بواسطة',
+    )
+
+    NAV_KEYS = ('dashboard', 'tasks', 'statements', 'track', 'compare',
+                'contracts', 'users', 'settings')
+
+    class Meta:
+        verbose_name = 'إعدادات الموقع'
+        verbose_name_plural = 'إعدادات الموقع'
+
+    def __str__(self):
+        return self.site_name
+
+    def clean(self):
+        import re
+        for color in (self.primary_color, self.accent_color):
+            if not re.fullmatch(r'#[0-9A-Fa-f]{6}', color or ''):
+                raise ValidationError('اللون يجب أن يكون بصيغة #RRGGBB')
+        keys = [k.strip() for k in (self.nav_order or '').split(',') if k.strip()]
+        unknown = [k for k in keys if k not in self.NAV_KEYS]
+        if unknown:
+            raise ValidationError(f'عناصر غير معروفة في الترتيب: {", ".join(unknown)}')
+        if len(set(keys)) != len(keys):
+            raise ValidationError('لا يمكن تكرار العنصر نفسه في الترتيب')
+
+    def nav_keys(self):
+        """الترتيب الفعلي، مع إضافة أي عنصر جديد لم يُدرج بعد في النهاية"""
+        keys = [k.strip() for k in (self.nav_order or '').split(',')
+                if k.strip() in self.NAV_KEYS]
+        seen = set(keys)
+        keys += [k for k in self.NAV_KEYS if k not in seen]
+        return keys
+
+    @classmethod
+    def load(cls):
+        """إرجاع الصف الوحيد، وإنشاؤه بالقيم الافتراضية إن لم يوجد"""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

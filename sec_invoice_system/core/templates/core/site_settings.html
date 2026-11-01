@@ -1,0 +1,84 @@
+{% extends 'core/base.html' %}
+{% block title %}الإدارة الفنية — {{ site.site_name }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>الإدارة الفنية</h1>
+    <p class="muted">
+        التحكم في اسم النظام والألوان ونمط التصميم وترتيب القائمة.
+        التغيير يُطبَّق فوراً على كل المستخدمين، ويُقيَّد في سجل التدقيق باسمك.
+    </p>
+</div>
+
+<form method="post" class="card settings-form">
+    {% csrf_token %}
+
+    <div class="settings-grid">
+        <div class="field">
+            <label for="id_site_name">اسم النظام</label>
+            {{ form.site_name }}
+            {{ form.site_name.errors }}
+        </div>
+
+        <div class="field">
+            <label for="id_org_name">اسم الجهة</label>
+            {{ form.org_name }}
+            {{ form.org_name.errors }}
+        </div>
+
+        <div class="field">
+            <label for="id_primary_color">اللون الأساسي</label>
+            {{ form.primary_color }}
+            <small class="muted">{{ form.primary_color.value }}</small>
+            {{ form.primary_color.errors }}
+        </div>
+
+        <div class="field">
+            <label for="id_accent_color">اللون الثانوي</label>
+            {{ form.accent_color }}
+            <small class="muted">{{ form.accent_color.value }}</small>
+            {{ form.accent_color.errors }}
+        </div>
+
+        <div class="field">
+            <label for="id_theme">نمط التصميم</label>
+            {{ form.theme }}
+            {{ form.theme.errors }}
+        </div>
+
+        <div class="field">
+            <label for="id_nav_order">ترتيب عناصر القائمة</label>
+            {{ form.nav_order }}
+            <small class="muted">
+                مفصولة بفواصل، من: {{ nav_labels|join:", " }}
+            </small>
+            {{ form.nav_order.errors }}
+        </div>
+
+        <div class="field field-check">
+            <label>
+                {{ form.show_forecast }} إظهار التوقعات في لوحة المتابعة
+            </label>
+            {{ form.show_forecast.errors }}
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">حفظ وتطبيق</button>
+        <a href="{% url 'dashboard' %}" class="btn btn-ghost">إلغاء</a>
+    </div>
+</form>
+
+<section class="card">
+    <h2>الترتيب الحالي كما سيظهر</h2>
+    <ol class="order-preview">
+        {% for key in nav_preview %}<li>{{ key }}</li>{% endfor %}
+    </ol>
+    {% if site.updated_by %}
+    <p class="muted">
+        آخر تعديل: {{ site.updated_at|date:"Y-m-d H:i" }} بواسطة
+        {{ site.updated_by.get_full_name|default:site.updated_by.username }}
+    </p>
+    {% endif %}
+</section>
+{% endblock %}

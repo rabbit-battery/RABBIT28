@@ -109,11 +109,14 @@ class TrackStatementForm(forms.Form):
 
 
 class UserCreateForm(forms.Form):
+    # technical_admin مستثنى عن قصد: دوره محمي ولا يُنشأ إلا من سطر الأوامر
+    # عبر manage.py setup_technical_admin، حتى لا يرقّي أحد نفسه إليه.
     SPECIALTY_CHOICES = [
         ('data_entry', 'مدخل بيانات'),
         ('accountant', 'محاسب'),
         ('branch_manager', 'مدير الفرع'),
         ('approver', 'معتمد المستخلص'),
+        ('contract_manager', 'مدير العقود'),
     ]
 
     username = forms.CharField(label='اسم المستخدم', max_length=150)

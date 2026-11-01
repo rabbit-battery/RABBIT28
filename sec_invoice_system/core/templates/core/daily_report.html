@@ -1,0 +1,101 @@
+{% extends 'core/base.html' %}
+{% block title %}نتائج الأيام — {{ site.site_name }}{% endblock %}
+
+{% block content %}
+<div class="page-head">
+    <h1>نتائج الأيام — {{ year }}/{{ month }}</h1>
+    <p class="muted">كم مهمة نُفّذت في كل يوم وكم بلغ المبلغ.</p>
+</div>
+
+<form method="get" class="card filters">
+    <div class="filters-row">
+        <label>
+            الشهر
+            <select name="month">
+                {% for m in "123456789,10,11,12"|slugify|default:"" %}{% endfor %}
+                <option value="1" {% if month == 1 %}selected{% endif %}>يناير</option>
+                <option value="2" {% if month == 2 %}selected{% endif %}>فبراير</option>
+                <option value="3" {% if month == 3 %}selected{% endif %}>مارس</option>
+                <option value="4" {% if month == 4 %}selected{% endif %}>أبريل</option>
+                <option value="5" {% if month == 5 %}selected{% endif %}>مايو</option>
+                <option value="6" {% if month == 6 %}selected{% endif %}>يونيو</option>
+                <option value="7" {% if month == 7 %}selected{% endif %}>يوليو</option>
+                <option value="8" {% if month == 8 %}selected{% endif %}>أغسطس</option>
+                <option value="9" {% if month == 9 %}selected{% endif %}>سبتمبر</option>
+                <option value="10" {% if month == 10 %}selected{% endif %}>أكتوبر</option>
+                <option value="11" {% if month == 11 %}selected{% endif %}>نوفمبر</option>
+                <option value="12" {% if month == 12 %}selected{% endif %}>ديسمبر</option>
+            </select>
+        </label>
+        <label>
+            السنة
+            <input type="number" name="year" value="{{ year }}" min="2000" max="2100">
+        </label>
+        <label>
+            العقد
+            <select name="contract">
+                <option value="">الكل</option>
+                {% for c in contracts %}
+                <option value="{{ c.pk }}" {% if selected_contract == c.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ c.contract_number }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+        <button type="submit" class="btn btn-primary">عرض</button>
+        <a class="btn btn-ghost"
+           href="?year={{ prev_year }}&month={{ prev_month }}&contract={{ selected_contract }}">الشهر السابق</a>
+        <a class="btn btn-ghost"
+           href="?year={{ next_year }}&month={{ next_month }}&contract={{ selected_contract }}">الشهر التالي</a>
+    </div>
+</form>
+
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-label">إجمالي الشهر حتى اليوم</span>
+        <span class="stat-value">{{ month_total|floatformat:2 }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">متوسط يوم العمل</span>
+        <span class="stat-value">{{ avg_per_day|floatformat:2 }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">الأيام المتبقية</span>
+        <span class="stat-value">{{ remaining_days }}</span>
+    </div>
+    <div class="stat-card stat-accent">
+        <span class="stat-label">المتوقع لنهاية الشهر</span>
+        <span class="stat-value">{{ forecast|floatformat:2 }}</span>
+    </div>
+</div>
+
+<section class="card">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>اليوم</th>
+            <th>التاريخ</th>
+            <th class="num">عدد المهام</th>
+            <th class="num">المبلغ (ر.س)</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for d in days %}
+        <tr class="{% if d.is_future %}row-future{% elif d.count == 0 %}row-empty{% endif %}">
+            <td>{{ d.date|date:"l" }}</td>
+            <td>{{ d.date|date:"Y-m-d" }}</td>
+            <td class="num">{{ d.count }}</td>
+            <td class="num">{{ d.total|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+        <tr>
+            <th colspan="2">الإجمالي</th>
+            <th class="num">{{ days|length }}</th>
+            <th class="num">{{ month_total|floatformat:2 }}</th>
+        </tr>
+        </tfoot>
+    </table>
+</section>
+{% endblock %}
