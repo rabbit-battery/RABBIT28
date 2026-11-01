@@ -133,4 +133,57 @@ docker compose exec web python manage.py createsuperuser
 ## الملفات الخاصة
 
 `private_media/` خارج مسار الملفات الثابتة ولا يُخدَم عبر الويب:
-العقود PDF، صور التوقيعات، والنسخ الاحتياطية. nginx يرفض `/private_media/` صراحةً.
+العقود PDF والنسخ الاحتياطية. nginx يرفض `/private_media/` صراحةً.
+
+**صور التوقيعات تُخزَّن في قاعدة البيانات** (`UserProfile.signature_data`) لا على
+القرص، لسببين:
+
+1. بصمة الحدث يجب أن تحمل الصورة نفسها التي وُقّع بها الإجراء لحظة توقيعه، لا
+   نسخة قد تُستبدل لاحقاً برفع جديد.
+2. النشر serverless (Vercel) بلا قرص دائم؛ التخزين على القرص كان سيفقد التوقيعات
+   عند كل إعادة تشغيل.
+
+يُعاد معالجة الصورة المرفوعة بالكامل (PNG نظيف) قبل التخزين لإسقاط أي بيانات
+مخفية مثل Exif، ويُرفض ما يتجاوز `MAX_SIGNATURE_BASE64_CHARS` بعد الترميز.
+
+---
+
+## النشر على Vercel (تجريبي)
+
+ملفات النشر:
+
+| الملف | الوظيفة |
+|-------|---------|
+| `api/index.py` | نقطة الدخول: يعرّض تطبيق WSGI باسم `app` |
+| `vercel.json` | إعادة كتابة كل المسارات إلى الدالة + أوامر البناء |
+| `requirements-vercel.txt` | الاعتماديات بلا WeasyPrint |
+
+متغيرات البيئة المطلوبة:
+
+```
+DJANGO_SECRET_KEY      مفتاح عشوائي ≥ 50 حرفاً
+DATABASE_URL           postgresql://user:pass@host:5432/db
+DJANGO_DEBUG           0
+DJANGO_ALLOWED_HOSTS   .vercel.app
+CSRF_TRUSTED_ORIGINS   https://*.vercel.app
+DJANGO_STATIC_STORAGE  django.contrib.staticfiles.storage.StaticFilesStorage
+STATIC_ROOT            public/static
+MEDIA_ROOT             /tmp/media
+PRIVATE_MEDIA_ROOT     /tmp/private_media
+```
+
+أمر البناء ينفّذ `collectstatic` ثم `migrate` ثم `setup_roles` ثم `seed_demo`،
+فلا حاجة لأي خطوة يدوية بعد النشر.
+
+### قيود النشر serverless (مهمة)
+
+- **تصدير PDF غير متاح**: WeasyPrint يحتاج `libpango` وهي غير موجودة على Vercel.
+  النظام يعرض رسالة عربية واضحة بدل أن ينكسر. **في نشر Docker الداخلي يعمل PDF
+  كاملاً** لأن `Dockerfile` يثبّت مكتبات النظام.
+- **مرفقات العقود مؤقتة**: `/tmp` يُمسح عند إعادة تشغيل النسخة. التوقيعات لا
+  تتأثر لأنها في قاعدة البيانات.
+- **الحماية من الإغلاق (Axes) والجلسات** تعمل، لكن ذاكرة التخزين المؤقت محلية
+  لكل نسخة، فقد لا يُحسب عدّاد المحاولات الفاشلة عبر نسخ متعددة.
+- `ALLOWED_HOSTS` يتبنى `*.vercel.app` كاملاً عند وجود متغير `VERCEL`. هذا مقبول
+  للتجربة لأن كل نطاقات vercel.app تُخدم عبر HTTPS إلزامياً، لكن **يجب ضبطه
+  صراحةً بالنطاق الداخلي النهائي** قبل الإنتاج.
