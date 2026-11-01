@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+
+# ملفات سرية
+.env
+*.pem
+nginx/ssl/cert.pem
+nginx/ssl/key.pem
+
+# الملفات الخاصة (توقيعات، عقود، نسخ احتياطية)
+private_media/*
+!private_media/**/
+!private_media/**/.gitkeep
+
+# بيئات التطوير
+.pytest_cache/
+.coverage
+htmlcov/
+.idea/
+.vscode/

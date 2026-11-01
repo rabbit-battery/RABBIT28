@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+{% block title %}إعداد المصادقة الثنائية{% endblock %}
+
+{% block content %}
+<div class="form-page narrow">
+    <h1>إعداد المصادقة الثنائية (2FA)</h1>
+
+    <div class="info-box">
+        <p>امسح رمز QR بتطبيق المصادقة (Google Authenticator أو Microsoft Authenticator):</p>
+    </div>
+
+    <div class="qr-container">
+        <img src="data:image/png;base64,{{ qr_code }}" alt="رمز QR لإعداد المصادقة" class="qr-image">
+    </div>
+
+    <div class="secret-key">
+        <p>أو أدخل المفتاح يدوياً:</p>
+        <code>{{ secret }}</code>
+    </div>
+
+    <form method="post" action="{% url 'verify_2fa' %}" class="styled-form">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="token">أدخل الرمز المكوّن من 6 أرقام:</label>
+            <input type="text" name="token" id="token" class="form-control"
+                   pattern="\d{6}" maxlength="6" inputmode="numeric"
+                   autocomplete="one-time-code" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary">تفعيل</button>
+    </form>
+</div>
+{% endblock %}

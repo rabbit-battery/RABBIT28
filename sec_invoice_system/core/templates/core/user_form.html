@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+{% block title %}{% if creating %}إضافة مستخدم{% else %}تعديل مستخدم{% endif %}{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1>{% if creating %}إضافة مستخدم جديد{% else %}تعديل مستخدم: {{ target_user.username }}{% endif %}</h1>
+
+    {% if creating %}
+    <div class="alert alert-info">
+        ستُعرض كلمة مرور مؤقتة مرة واحدة بعد الإنشاء، ويجب على المستخدم تغييرها عند أول دخول.
+    </div>
+    {% endif %}
+
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if creating %}إنشاء{% else %}حفظ{% endif %}
+            </button>
+            <a href="{% url 'users' %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

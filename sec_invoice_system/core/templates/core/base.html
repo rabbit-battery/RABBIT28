@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}نظام المستخلصات{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="nav-logo">⚡</span>
+            نظام مستخلصات العقد الموحد
+        </div>
+        <div class="nav-links">
+            <a href="{% url 'dashboard' %}" class="nav-link">لوحة المتابعة</a>
+            <a href="{% url 'tasks' %}" class="nav-link">المهام</a>
+            <a href="{% url 'statements' %}" class="nav-link">المستخلصات</a>
+            <a href="{% url 'statement_track' %}" class="nav-link">تتبع</a>
+            <a href="{% url 'statement_compare' %}" class="nav-link">المقارنة</a>
+            {% if user.profile.specialty == 'contract_manager' or user.is_superuser %}
+            <a href="{% url 'contracts' %}" class="nav-link">العقود</a>
+            <a href="{% url 'users' %}" class="nav-link">المستخدمون</a>
+            {% endif %}
+            <div class="nav-user">
+                <span>{{ user.get_full_name|default:user.username }}</span>
+                <a href="{% url 'signature_upload' %}" class="nav-link-sm">التوقيع</a>
+                <a href="{% url 'password_change' %}" class="nav-link-sm">كلمة المرور</a>
+                <form method="post" action="{% url 'logout' %}" class="inline-form">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-link-sm logout nav-button">خروج</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container">
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>نظام مستخلصات العقد الموحد - الشركة السعودية للكهرباء © 2025</p>
+    </footer>
+
+    {% load static %}
+    <script src="{% static 'core/js/main.js' %}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

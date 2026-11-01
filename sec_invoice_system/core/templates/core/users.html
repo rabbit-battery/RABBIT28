@@ -1,0 +1,48 @@
+{% extends "core/base.html" %}
+{% block title %}إدارة المستخدمين{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>المستخدمون</h1>
+    <a href="{% url 'user_create' %}" class="btn btn-primary">إضافة مستخدم</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>اسم المستخدم</th>
+                <th>الاسم الكامل</th>
+                <th>الرقم الوظيفي</th>
+                <th>التخصص</th>
+                <th>البريد</th>
+                <th>إجراءات</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>{{ u.username }}</td>
+                <td>{{ u.get_full_name }}</td>
+                <td>{{ u.profile.employee_id }}</td>
+                <td>{{ u.profile.get_specialty_display }}</td>
+                <td>{{ u.email }}</td>
+                <td>
+                    <a href="{% url 'user_edit' u.pk %}" class="btn btn-sm btn-edit">تعديل</a>
+                    <form method="post" action="{% url 'user_reset_password' u.pk %}"
+                          class="inline-form"
+                          data-confirm="إعادة تعيين كلمة مرور {{ u.username }}؟">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-warning">
+                            إعادة كلمة المرور
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center">لا يوجد مستخدمون</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "core/base.html" %}
+{% block title %}المصادقة الثنائية{% endblock %}
+
+{% block content %}
+<div class="form-page narrow">
+    {% if success %}
+    <h1>✓ تم تفعيل المصادقة الثنائية</h1>
+
+    <div class="alert alert-warning">
+        <strong>احفظ هذه الرموز الاحتياطية في مكان آمن!</strong>
+        <p>كل رمز يُستخدم مرة واحدة فقط في حال فقدان الهاتف.</p>
+    </div>
+
+    <div class="backup-codes">
+        {% for code in backup_codes %}
+        <div class="backup-code">{{ code }}</div>
+        {% endfor %}
+    </div>
+
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">الانتقال للوحة المتابعة</a>
+
+    {% else %}
+    <h1>إدخال رمز المصادقة</h1>
+
+    {% if registering %}
+    <div class="info-box">
+        <p>أدخل الرمز الظاهر في تطبيق المصادقة بعد مسح رمز QR لتأكيد الجهاز.</p>
+        <p>لم تضف الجهاز بعد؟ <a href="{% url 'setup_2fa' %}">عرض رمز QR</a></p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="token">رمز المصادقة (6 أرقام):</label>
+            <input type="text" name="token" id="token" class="form-control"
+                   pattern="\d{6}" maxlength="6" inputmode="numeric"
+                   autocomplete="one-time-code" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary">تحقق</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

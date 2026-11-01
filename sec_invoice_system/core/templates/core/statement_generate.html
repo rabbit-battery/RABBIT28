@@ -1,0 +1,33 @@
+{% extends "core/base.html" %}
+{% block title %}إنشاء مستخلص{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1>إنشاء مستخلص جديد</h1>
+
+    <div class="info-box">
+        <ul>
+            <li>يُجمع كل مهام الشهر المحدد غير المقفلة في مستخلص واحد.</li>
+            <li>بعد الإنشاء تُقفل المهام ولا يمكن تعديلها أو حذفها.</li>
+            <li>لا يمكن إنشاء مستخلصين نشطين لنفس العقد والشهر.</li>
+        </ul>
+    </div>
+
+    <form method="post" class="styled-form">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="field-error">{{ field.errors.0 }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">إنشاء</button>
+            <a href="{% url 'statements' %}" class="btn btn-secondary">إلغاء</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

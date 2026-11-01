@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.example
+__pycache__/
+*.py[cod]
+db.sqlite3
+staticfiles/
+media/
+private_media/
+nginx/ssl/
+venv/
+.venv/
+README.md

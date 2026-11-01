@@ -1,0 +1,105 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sec_db}
+      POSTGRES_USER: ${DB_USER:-sec_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sec_user} -d ${DB_NAME:-sec_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      - DJANGO_DEBUG=0
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - DATABASE_URL=1
+      - DB_NAME=${DB_NAME:-sec_db}
+      - DB_USER=${DB_USER:-sec_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_HOST=db
+      - DB_PORT=5432
+    volumes:
+      - private_media:/app/private_media
+      - static_files:/app/staticfiles
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - static_files:/usr/share/nginx/static:ro
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  backup:
+    build: .
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_NAME=${DB_NAME:-sec_db}
+      - DB_USER=${DB_USER:-sec_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - DB_HOST=db
+    volumes:
+      - backup_data:/backups
+    networks:
+      - backend
+    entrypoint: >
+      sh -c 'while true; do
+        TIMESTAMP=$$(date +%Y%m%d_%H%M%S);
+        PGPASSWORD=$$DB_PASSWORD pg_dump -h $$DB_HOST -U $$DB_USER $$DB_NAME |
+          gzip > /backups/db_$$TIMESTAMP.sql.gz;
+        find /backups -name "db_*.sql.gz" -mtime +14 -delete;
+        sleep 86400;
+      done'
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  private_media:
+  static_files:
+  backup_data:
+
+networks:
+  backend:
+    driver: bridge
